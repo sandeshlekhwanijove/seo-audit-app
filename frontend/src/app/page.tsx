@@ -6,7 +6,9 @@ import ScoreGauge from "@/components/ScoreGauge";
 import WinsIssues from "@/components/WinsIssues";
 import ChartsRow from "@/components/ChartsRow";
 import ResultsTable from "@/components/ResultsTable";
-import { startAudit, getStatus, getResults, excelDownloadUrl, AuditStatus, AuditResults } from "@/lib/api";
+import PriorityImprovements from "@/components/PriorityImprovements";
+import SFComparison from "@/components/SFComparison";
+import { startAudit, getStatus, getResults, excelDownloadUrl, htmlReportUrl, AuditStatus, AuditResults } from "@/lib/api";
 
 type Phase = "idle" | "running" | "done" | "error";
 
@@ -111,9 +113,13 @@ export default function Home() {
           </div>
           {phase === "done" && results && (
             <div className="flex items-center gap-2">
+              <a href={htmlReportUrl(results.job_id)} download
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-300 hover:bg-blue-50 text-blue-700 transition-colors">
+                <Download size={13} /> HTML Report
+              </a>
               <a href={excelDownloadUrl(results.job_id)} download
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors">
-                <Download size={13} /> Export Excel
+                <Download size={13} /> Excel
               </a>
               <button onClick={reset}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1a3c5e] hover:bg-[#142f4a] text-white transition-colors">
@@ -286,10 +292,13 @@ export default function Home() {
                 <StatCard label="Critical Issues" value={sum.critical_pages}     sub="pages affected" color="#dc2626" />
                 <StatCard label="Warnings"        value={sum.warning_pages}      sub="pages affected" color="#d97706" />
                 <StatCard label="Indexable"       value={sum.indexable}          sub={`of ${sum.total} pages`} color="#059669" />
-                <StatCard label="Avg Response"    value={rtDisplay}              sub={sum.avg_response_ms ? "server response time" : "no timing data"} color={rtColor} />
+                <StatCard label="Avg TTFB"         value={rtDisplay}              sub={sum.avg_response_ms ? "time to first byte" : "no timing data"} color={rtColor} />
                 <StatCard label="WAF Blocked"     value={sum.waf_blocked}        sub="bot-protected" color="#7c3aed" />
               </div>
             </div>
+
+            {/* Priority improvements — shown first */}
+            <PriorityImprovements results={results.results} summary={sum} />
 
             {/* Wins & Issues */}
             <WinsIssues results={results.results} summary={sum} />
@@ -306,6 +315,9 @@ export default function Home() {
 
             {/* Table */}
             <ResultsTable results={results.results} />
+
+            {/* Screaming Frog comparison */}
+            <SFComparison />
           </div>
         )}
       </main>

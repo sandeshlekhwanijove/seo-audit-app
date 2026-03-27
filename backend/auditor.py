@@ -269,7 +269,8 @@ def _wait_for_real_content(page, min_chars: int = 800, timeout_s: int = 30) -> d
 # Build result dict from raw data
 # ---------------------------------------------------------------------------
 def _build_audit_result(url, final_url, status_code, http_headers,
-                        response_time_ms, html_size_bytes, dom_data):
+                        response_time_ms, html_size_bytes, dom_data,
+                        ttfb_ms: int = 0, full_load_ms: int = 0):
     h1s = dom_data.get("h1s") or []
     h2s = dom_data.get("h2s") or []
     h3s = dom_data.get("h3s") or []
@@ -285,7 +286,10 @@ def _build_audit_result(url, final_url, status_code, http_headers,
         "Final URL": final_url,
         "Status Code": status_code,
         "Redirect URL": final_url if final_url != url else "",
-        "Response Time (ms)": response_time_ms,
+        # TTFB = HTTP response received (what Screaming Frog calls "Response Time")
+        # Full Load = TTFB + JS hydration wait (time until real content appeared)
+        "Response Time (ms)": ttfb_ms or response_time_ms,
+        "Full Load Time (ms)": full_load_ms or response_time_ms,
         "Content Type": http_headers.get("content-type", ""),
         "Page Size (bytes)": html_size_bytes,
         "Page Size (KB)": round(html_size_bytes / 1024, 1),
@@ -464,11 +468,14 @@ def _classify_seo_issues(data: dict) -> dict:
     elif page_kb > 2000:
         info.append(f"Page size {page_kb:.0f} KB (consider optimisation)")
 
-    rt = data.get("Response Time (ms)") or 0
+    rt = data.get("Response Time (ms)") or 0          # TTFB
+    fl = data.get("Full Load Time (ms)") or rt         # full JS load
     if rt > 3000:
-        warnings.append(f"Slow response time ({rt} ms)")
+        warnings.append(f"Slow server response / TTFB ({rt} ms)")
     elif rt > 1500:
-        info.append(f"Response time {rt} ms")
+        info.append(f"Server response time {rt} ms (TTFB)")
+    if fl > 5000 and fl != rt:
+        info.append(f"Full page load took {fl} ms (JS rendering included)")
 
     wc = data.get("Word Count") or 0
     if 0 < wc < 100:
@@ -545,13 +552,28 @@ def audit_page(url: str) -> dict:
             if resp:
                 status_code[0] = resp.status
                 http_headers[0] = dict(resp.headers)
+
+            # TTFB via Navigation Timing API (most accurate)
+            ttfb = 0
+            try:
+                ttfb = page.evaluate(
+                    "() => { try { const [n] = performance.getEntriesByType('navigation');"
+                    " return n ? Math.round(n.responseStart) : 0; } catch(e) { return 0; } }"
+                )
+            except Exception:
+                pass
+
+            # Fallback: DOMContentLoaded time if TTFB not available
+            domcl_time = round((time.time() - t0) * 1000)
+            ttfb = ttfb or domcl_time
+
             try:
                 page.wait_for_load_state("networkidle", timeout=15000)
             except Exception:
                 pass
 
             content_check = _wait_for_real_content(page, min_chars=600, timeout_s=30)
-            response_time = round((time.time() - t0) * 1000)
+            full_load_time = round((time.time() - t0) * 1000)
             final_url = page.url
             dom_data = page.evaluate(_AUDIT_DOM_SCRIPT)
             dom_data["_waf_challenge"] = content_check["is_challenge"]
@@ -561,7 +583,8 @@ def audit_page(url: str) -> dict:
             browser.close()
 
         return _build_audit_result(url, final_url, status_code[0], http_headers[0],
-                                   response_time, html_size, dom_data)
+                                   ttfb, html_size, dom_data,
+                                   ttfb_ms=ttfb, full_load_ms=full_load_time)
     except Exception as e:
         return {
             "URL": url, "Final URL": url, "Status Code": 0,
@@ -636,13 +659,25 @@ def crawl_site(
                     if resp:
                         status_code[0] = resp.status
                         http_headers[0] = dict(resp.headers)
+
+                    ttfb = 0
+                    try:
+                        ttfb = page.evaluate(
+                            "() => { try { const [n] = performance.getEntriesByType('navigation');"
+                            " return n ? Math.round(n.responseStart) : 0; } catch(e) { return 0; } }"
+                        )
+                    except Exception:
+                        pass
+                    domcl_time = round((time.time() - t0) * 1000)
+                    ttfb = ttfb or domcl_time
+
                     try:
                         page.wait_for_load_state("networkidle", timeout=15000)
                     except Exception:
                         pass
 
                     content_check = _wait_for_real_content(page, min_chars=600, timeout_s=25)
-                    response_time = round((time.time() - t0) * 1000)
+                    full_load_time = round((time.time() - t0) * 1000)
                     final_url = page.url
                     dom_data = page.evaluate(_AUDIT_DOM_SCRIPT)
                     dom_data["_waf_challenge"] = content_check["is_challenge"]
@@ -651,8 +686,9 @@ def crawl_site(
                     html_size = len(html_content.encode("utf-8"))
 
                     data = _build_audit_result(url, final_url, status_code[0],
-                                               http_headers[0], response_time,
-                                               html_size, dom_data)
+                                               http_headers[0], ttfb,
+                                               html_size, dom_data,
+                                               ttfb_ms=ttfb, full_load_ms=full_load_time)
                     data["Crawl Depth"] = url.count("/") - start_url.count("/")
                     results.append(data)
 

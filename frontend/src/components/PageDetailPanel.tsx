@@ -1,7 +1,8 @@
 "use client";
 
 import { PageResult } from "@/lib/api";
-import { X, ExternalLink, CheckCircle, XCircle, AlertCircle, Info } from "lucide-react";
+import { X, ExternalLink, XCircle, AlertCircle, Info } from "lucide-react";
+import Tooltip from "./Tooltip";
 
 // ─── Scoring helpers ──────────────────────────────────────────────────────────
 
@@ -109,16 +110,23 @@ function ScoreBadge({ score }: { score: number }) {
 
 interface ParamRowProps {
   label: string;
+  tip?: string;
   value: React.ReactNode;
   sub?: string;
   score?: ScoreResult;
   na?: boolean;
 }
-function ParamRow({ label, value, sub, score, na }: ParamRowProps) {
+function ParamRow({ label, tip, value, sub, score, na }: ParamRowProps) {
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-slate-50 last:border-0">
       <div className="w-36 flex-shrink-0">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</span>
+        {tip ? (
+          <Tooltip text={tip}>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</span>
+          </Tooltip>
+        ) : (
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</span>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm text-slate-800 font-medium break-words">{value}</div>
@@ -237,24 +245,28 @@ export default function PageDetailPanel({ page, onClose }: Props) {
           <SectionHeader title="Content Signals" icon="📝" />
           <ParamRow
             label="Meta Title"
+            tip="The <title> tag is displayed as the blue headline in Google search results. It should be 30–60 characters, include your primary keyword near the front, and be unique for every page. It's one of the most important on-page SEO signals."
             value={page.Title ? `"${page.Title.substring(0, 80)}"` : <span className="text-red-500 italic">Not set</span>}
             sub={page.Title ? `${page["Title Length"]} characters` : undefined}
             score={tScore}
           />
           <ParamRow
             label="Meta Description"
+            tip="The meta description appears as the grey text under the title in Google search results. It doesn't directly affect rankings but heavily influences click-through rates (CTR). Optimal length is 70–160 characters. Write it like ad copy — it's your SERP sales pitch."
             value={page["Meta Description"] ? `"${page["Meta Description"].substring(0, 120)}"` : <span className="text-amber-500 italic">Not set</span>}
             sub={page["Meta Description"] ? `${page["Meta Description Length"]} characters` : undefined}
             score={dScore}
           />
           <ParamRow
             label="H1 Tag"
+            tip="The H1 is the main visible heading on a page. There should be exactly one H1 per page, and it should contain your primary keyword. It helps both users and Google understand the page's main topic."
             value={page["H1 First"] || <span className="text-red-500 italic">Missing</span>}
             sub={page["H1 Count"] > 1 ? `⚠ ${page["H1 Count"]} H1 tags found — only 1 recommended` : undefined}
             score={h1Score}
           />
           <ParamRow
             label="H2 Tags"
+            tip="H2 tags are subheadings that structure your content. They help Google understand content hierarchy and are a secondary keyword placement opportunity. Use them to break up long content and improve readability."
             value={`${page["H2 Count"] ?? 0} found`}
             sub={page["H2 First"] ? `First: "${page["H2 First"].substring(0, 60)}"` : undefined}
           />
@@ -264,6 +276,7 @@ export default function PageDetailPanel({ page, onClose }: Props) {
           />
           <ParamRow
             label="Word Count"
+            tip="Content length is a quality signal. Pages with <300 words are considered 'thin content' and may rank poorly. Long-form content (>700 words) tends to rank better for competitive keywords as it demonstrates depth and expertise."
             value={isWaf ? "N/A" : `${page["Word Count"] ?? 0} words`}
             sub={page["Paragraph Count"] ? `${page["Paragraph Count"]} paragraphs` : undefined}
             score={isWaf ? undefined : wcScore}
@@ -287,31 +300,49 @@ export default function PageDetailPanel({ page, onClose }: Props) {
 
           {/* ── Technical SEO ── */}
           <SectionHeader title="Technical SEO" icon="⚙️" />
-          <ParamRow label="HTTPS" value={page.HTTPS ? "✅ Secure" : "❌ HTTP only"} score={httpsScore} />
+          <ParamRow
+            label="HTTPS"
+            tip="HTTPS (SSL/TLS encryption) is a confirmed Google ranking signal. Pages served over HTTP are marked 'Not Secure' in Chrome and will be ranked lower than equivalent HTTPS pages."
+            value={page.HTTPS ? "✅ Secure" : "❌ HTTP only"}
+            score={httpsScore}
+          />
           <ParamRow
             label="Indexability"
+            tip="An indexable page can appear in Google search results. Pages can be non-indexable due to noindex meta tags, X-Robots-Tag headers, robots.txt blocks, 4xx/5xx status codes, or canonical tags pointing elsewhere."
             value={page.Indexable ? "✅ Indexable" : `❌ Not indexable`}
             sub={page["Indexability Issues"] || undefined}
           />
           <ParamRow
             label="Canonical URL"
+            tip="The canonical tag (<link rel='canonical'>) tells Google which URL is the 'official' version of a page. This prevents duplicate content issues from URL variations (e.g., with/without trailing slash, query parameters). If pointing to a different domain, it consolidates ranking signals there."
             value={page["Canonical URL"] ? <span className="font-mono text-xs break-all">{page["Canonical URL"].substring(0, 80)}</span> : <span className="text-amber-500 italic">Missing</span>}
             score={canonScore}
           />
           <ParamRow
             label="Meta Robots"
+            tip="The robots meta tag controls how search engines index this page and follow its links. 'noindex' prevents the page from appearing in search results. 'nofollow' prevents crawlers from following links on this page. Default behaviour (when absent) is 'index, follow'."
             value={page["Meta Robots"] || <span className="text-slate-400 italic">Not set (defaults to index, follow)</span>}
           />
           <ParamRow
             label="X-Robots-Tag"
+            tip="An HTTP response header equivalent to the meta robots tag. Applied at the server level, it can apply to non-HTML files (PDFs, images). Takes precedence over meta robots if both are set."
             value={page["X-Robots-Tag"] || <span className="text-slate-400 italic">Not set</span>}
           />
           <ParamRow
-            label="Response Time"
+            label="Response Time (TTFB)"
+            tip="Time To First Byte — the time from when a browser sends a request until it receives the first byte from the server. Google considers <800ms excellent, <1800ms 'needs improvement', and >1800ms poor. This is a Core Web Vitals signal."
             value={page["Response Time (ms)"] ? `${page["Response Time (ms)"]}ms` : "N/A"}
             score={rtScore.label !== "N/A" ? rtScore : undefined}
             na={!page["Response Time (ms)"]}
           />
+          {(page["Full Load Time (ms)"] ?? 0) > 0 && page["Full Load Time (ms)"] !== page["Response Time (ms)"] && (
+            <ParamRow
+              label="Full Load Time"
+              tip="Total time for the page to fully load including all JavaScript rendering and hydration. This is higher than TTFB because modern SPAs (React, Next.js etc.) need additional time to execute JavaScript and render content. Google's TTFB measures the first byte, not the full JS render time."
+              value={`${page["Full Load Time (ms)"]}ms`}
+              sub="Includes JS rendering / SPA hydration time"
+            />
+          )}
           <ParamRow
             label="Page Size"
             value={page["Page Size (KB)"] ? `${page["Page Size (KB)"]} KB` : "N/A"}
@@ -322,6 +353,7 @@ export default function PageDetailPanel({ page, onClose }: Props) {
           />
           <ParamRow
             label="Text:HTML Ratio"
+            tip="The percentage of the page's HTML that is actual text content (vs. markup, scripts, styles). A higher ratio generally indicates a more content-rich page. Very low ratios (<5%) can signal thin content or excessive code bloat."
             value={page["Text to HTML Ratio (%)"] ? `${page["Text to HTML Ratio (%)"]}%` : "N/A"}
             sub="Higher is better — more content relative to markup"
           />
@@ -331,6 +363,7 @@ export default function PageDetailPanel({ page, onClose }: Props) {
           <SectionHeader title="Media &amp; Links" icon="🖼️" />
           <ParamRow
             label="Images"
+            tip="Alt text (alternative text) is an HTML attribute added to <img> tags that describes the image. It serves three purposes: (1) search engines use it to understand image content for image search, (2) screen readers use it for accessibility (WCAG compliance), and (3) it's displayed when images fail to load."
             value={`${page["Image Count"] ?? 0} total`}
             sub={page["Images Missing Alt"] ? `${page["Images Missing Alt"]} missing alt text` : "All images have alt text"}
             score={imgScore}
@@ -347,6 +380,7 @@ export default function PageDetailPanel({ page, onClose }: Props) {
           <SectionHeader title="Social &amp; Schema" icon="🌐" />
           <ParamRow
             label="Open Graph"
+            tip="Open Graph tags (og:title, og:description, og:image) control how your page appears when shared on Facebook, LinkedIn, Slack, and other platforms. The og:image is especially important — use a 1200×630px image for best results. Without OG tags, platforms generate their own often-poor previews."
             value={page["OG Title"] ? `"${page["OG Title"].substring(0, 60)}"` : <span className="text-slate-400 italic">og:title not set</span>}
             sub={[
               page["OG Description"] ? `og:description ✅` : "og:description ❌",
@@ -357,15 +391,18 @@ export default function PageDetailPanel({ page, onClose }: Props) {
           />
           <ParamRow
             label="Twitter Card"
+            tip="Twitter Card tags control how links appear when shared on Twitter/X. 'summary_large_image' displays a large image preview and is the recommended type for article and content pages."
             value={page["Twitter Card"] || <span className="text-slate-400 italic">Not set</span>}
           />
           <ParamRow
             label="Structured Data"
+            tip="Schema.org structured data (JSON-LD format) helps Google understand your content semantically and can unlock rich results in SERPs: star ratings, FAQs, breadcrumbs, recipes, events, job postings, etc. Rich results typically have significantly higher click-through rates than standard results."
             value={page["Has Structured Data"] ? page["Schema Types"] || "Present" : <span className="text-slate-400 italic">None detected</span>}
             score={schemaScore}
           />
           <ParamRow
             label="Hreflang"
+            tip="Hreflang tags tell Google which language and region variant of a page to show to users in different locations. Essential for multilingual or multi-regional sites. Without hreflang, Google may show users the wrong language version of your content."
             value={page["Hreflang Languages"] || <span className="text-slate-400 italic">None (may be intentional)</span>}
           />
 

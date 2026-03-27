@@ -106,6 +106,10 @@ export interface PageResult {
   "Iframes Count": number;
   "Flesch Reading Ease": number | string;
 
+  // Timing (new: TTFB vs full JS load)
+  "Full Load Time (ms)": number;
+  "Redirect URL": string;
+
   // Audit flags
   "WAF Blocked": boolean;
   "Content Timed Out": boolean;
@@ -154,4 +158,8 @@ export async function getResults(jobId: string): Promise<AuditResults> {
 
 export function excelDownloadUrl(jobId: string): string {
   return `${BASE}/api/audit/download/${jobId}/excel`;
+}
+
+export function htmlReportUrl(jobId: string): string {
+  return `${BASE}/api/audit/download/${jobId}/report`;
 }
