@@ -1,5 +1,5 @@
 # Use the official Playwright image — Chrome is pre-installed
-FROM mcr.microsoft.com/playwright/python:v1.44.0-noble
+FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
 
 WORKDIR /app
 
