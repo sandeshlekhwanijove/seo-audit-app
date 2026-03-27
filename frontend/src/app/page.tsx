@@ -24,8 +24,7 @@ function StatCard({ label, value, sub, color = "#2563eb", active, onClick }: {
       className={`bg-white rounded-xl border p-4 flex flex-col gap-0.5 text-left transition-all duration-200 w-full
         ${onClick ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0" : "cursor-default"}
         ${active ? "ring-2 shadow-md -translate-y-0.5" : "border-slate-200"}`}
-      style={{ ringColor: color, outlineColor: color,
-               ...(active ? { borderColor: color, boxShadow: `0 0 0 2px ${color}40` } : {}) }}
+      style={active ? { borderColor: color, boxShadow: `0 0 0 2px ${color}40` } : {}}
     >
       <div className="text-2xl font-extrabold leading-none" style={{ color }}>{value}</div>
       <div className="text-xs font-semibold text-slate-700 mt-1">{label}</div>
