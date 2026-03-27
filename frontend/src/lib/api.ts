@@ -1,4 +1,6 @@
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Ensure BASE always has a protocol so it's never treated as a relative path.
+const _raw = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE = _raw.startsWith("http") ? _raw : `https://${_raw}`;
 
 export interface AuditRequest {
   url: string;

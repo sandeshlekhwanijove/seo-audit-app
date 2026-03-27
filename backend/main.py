@@ -118,7 +118,9 @@ def _run_audit(job_id: str, req: AuditRequest):
         warning_pages = sum(1 for r in results if (r.get("Warning Count") or 0) > 0)
         indexable = sum(1 for r in results if r.get("Indexable"))
         waf_count = sum(1 for r in results if r.get("WAF Blocked"))
-        avg_rt = round(sum(r.get("Response Time (ms)") or 0 for r in results) / max(total, 1))
+        # Only average over pages that actually have a timing (exclude error results)
+        timed = [r["Response Time (ms)"] for r in results if r.get("Response Time (ms)")]
+        avg_rt = round(sum(timed) / len(timed)) if timed else 0
         https_count = sum(1 for r in results if r.get("HTTPS"))
 
         # SEO score (100 = no issues)

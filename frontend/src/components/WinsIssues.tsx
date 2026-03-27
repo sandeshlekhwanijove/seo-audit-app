@@ -46,8 +46,9 @@ function computeWinsIssues(results: PageResult[], summary: AuditSummary) {
   if (schemaPct >= 50) wins.push({ icon: "🧩", text: `${schemaPct}% of pages have structured data`, detail: "Eligible for rich results in Google SERPs" });
   else issues.push({ icon: "🧩", text: `Structured data absent on ${100 - schemaPct}% of pages`, detail: `${total - schemaN} pages missing Schema markup for rich snippets` });
 
-  if (summary.avg_response_ms < 1200) wins.push({ icon: "⚡", text: `Excellent average response time: ${summary.avg_response_ms}ms`, detail: "Fast server response is a positive Core Web Vitals signal" });
-  else if (summary.avg_response_ms > 2200) issues.push({ icon: "🐌", text: `Average response time is ${summary.avg_response_ms}ms — too slow`, detail: "Slow TTFB hurts Core Web Vitals and Google rankings" });
+  const rt = summary.avg_response_ms ?? 0;
+  if (rt > 0 && rt < 1200) wins.push({ icon: "⚡", text: `Excellent average response time: ${rt}ms`, detail: "Fast server response is a positive Core Web Vitals signal" });
+  else if (rt > 2200) issues.push({ icon: "🐌", text: `Average response time is ${rt}ms — too slow`, detail: "Slow TTFB hurts Core Web Vitals and Google rankings" });
 
   if (summary.waf_blocked > 0) {
     issues.push({ icon: "🛡️", text: `${summary.waf_blocked} pages blocked by WAF / bot protection`, detail: "These pages could not be fully audited — real content was inaccessible" });
