@@ -298,46 +298,98 @@ def download_html_report(job_id: str):
     )
 
 
+@app.get("/api/audit/download/{job_id}/pdf")
+async def download_pdf_report(job_id: str):
+    """Render the HTML report via Playwright and return as PDF."""
+    import json as _json
+    from playwright.async_api import async_playwright
+
+    job = _get_job(job_id)
+    if job["status"] != "done":
+        raise HTTPException(status_code=202, detail="Audit not complete yet")
+
+    results_clean = [
+        {k: v for k, v in r.items() if not k.startswith("_")}
+        for r in job.get("results", [])
+    ]
+    summary = job.get("summary", {})
+    site_url = job.get("request", {}).get("url", "")
+    generated_at = job.get("finished_at", datetime.utcnow().isoformat())
+    data_json = _json.dumps({"summary": summary, "results": results_clean, "url": site_url})
+    html_content = _build_html_report(data_json, site_url, generated_at)
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        pg = await browser.new_page()
+        await pg.set_content(html_content, wait_until="domcontentloaded")
+        await pg.wait_for_timeout(1500)  # let JS populate the DOM
+        pdf_bytes = await pg.pdf(
+            format="A4",
+            print_background=True,
+            margin={"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"},
+        )
+        await browser.close()
+
+    domain = site_url.replace("https://", "").replace("http://", "").split("/")[0]
+    filename = f"seo-report-{domain}-{datetime.utcnow().strftime('%Y%m%d')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 
 # ─── HTML Report constants (pure strings — no f-string, so JS/CSS {} are literal) ──
 _R_CSS = """
 <style>
 :root{--navy:#1a3c5e;--blue:#2563eb}
-body{font-family:'Segoe UI',sans-serif;background:#f8fafc;color:#1e293b;position:relative}
+*{box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293b;position:relative;font-size:15px;line-height:1.6}
 .dyn-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 .dyn-bg span{position:absolute;border-radius:50%;filter:blur(90px)}
 .dyn-bg span:nth-child(1){width:600px;height:600px;background:radial-gradient(circle,#2563eb22,transparent 70%);top:-150px;left:-150px;animation:bgf1 28s ease-in-out infinite}
 .dyn-bg span:nth-child(2){width:500px;height:500px;background:radial-gradient(circle,#1a3c5e18,transparent 70%);bottom:-100px;right:-100px;animation:bgf2 35s ease-in-out infinite}
 @keyframes bgf1{0%,100%{transform:translate(0,0)}50%{transform:translate(50px,-40px)}}
 @keyframes bgf2{0%,100%{transform:translate(0,0)}50%{transform:translate(-40px,50px)}}
-.hero{background:linear-gradient(135deg,var(--navy),#2d7dd2);color:#fff;padding:2.5rem 0;position:relative;z-index:1}
-.score-circle{width:100px;height:100px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:2rem;margin:0 auto;border:5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08)}
-.card{border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 8px rgba(0,0,0,.05);position:relative;z-index:1}
-.param-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9}
+.hero{background:linear-gradient(135deg,var(--navy) 0%,#1e5fa8 100%);color:#fff;padding:2.5rem 0;position:relative;z-index:1}
+.score-circle{width:110px;height:110px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:2.2rem;margin:0 auto;border:5px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);line-height:1}
+.score-circle small{font-size:.75rem;font-weight:600;opacity:.8;margin-top:2px}
+.card{border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);background:#fff;position:relative;z-index:1}
+/* param rows inside detail pane */
+.param-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9}
 .param-row:last-child{border-bottom:0}
-.param-label{width:160px;flex-shrink:0;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b}
-.param-val{flex:1;font-size:.84rem;color:#1e293b}
-.grade-badge{font-size:.75rem;font-weight:800;padding:2px 8px;border-radius:6px}
-.score-bar-wrap{width:80px;flex-shrink:0}
-.score-bar{height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden}
-.score-bar-fill{height:100%;border-radius:3px}
-.section-hdr{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;margin:16px 0 4px}
-.issue-crit{color:#dc2626}.issue-warn{color:#d97706}.issue-info{color:#2563eb}
+.param-label{width:170px;flex-shrink:0;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#475569;padding-top:2px}
+.param-val{flex:1;min-width:0;font-size:.88rem;color:#1e293b;word-break:break-word}
+.param-sub{color:#64748b;font-size:.75rem;margin-top:2px}
+.grade-badge{display:inline-flex;align-items:center;font-size:.72rem;font-weight:800;padding:2px 8px;border-radius:6px;flex-shrink:0;white-space:nowrap}
+.score-bar-wrap{width:70px;flex-shrink:0;padding-top:5px}
+.score-bar{height:7px;border-radius:4px;background:#e2e8f0;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:4px;transition:width .6s ease}
+.section-hdr{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.9px;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:5px;margin:20px 0 8px}
+.issue-crit{color:#dc2626;font-size:.88rem}.issue-warn{color:#b45309;font-size:.88rem}.issue-info{color:#2563eb;font-size:.88rem}
 .row-crit{border-left:3px solid #ef4444}.row-warn{border-left:3px solid #f59e0b}
 .row-ok{border-left:3px solid #10b981}.row-waf{border-left:3px solid #7c3aed;background:#faf5ff}
-.win-item,.issue-item{padding:8px 0;border-bottom:1px solid #f8fafc;font-size:.85rem;display:flex;align-items:start;gap:8px}
+.win-item,.issue-item{padding:9px 0;border-bottom:1px solid #f1f5f9;font-size:.88rem;display:flex;align-items:flex-start;gap:8px}
 .win-item:last-child,.issue-item:last-child{border-bottom:0}
-.priority-card{border-left:4px solid #dc2626;background:#fff5f5;border-radius:0 10px 10px 0;padding:12px 16px;margin-bottom:10px}
+.priority-card{border-left:4px solid #dc2626;background:#fff5f5;border-radius:0 10px 10px 0;padding:14px 18px;margin-bottom:12px}
 .priority-card.warn{border-color:#f59e0b;background:#fffbeb}
 .priority-card.opp{border-color:#2563eb;background:#eff6ff}
-th{white-space:nowrap;font-size:.75rem}
-td{font-size:.8rem;vertical-align:middle}
-#detailPane{display:none;position:fixed;right:0;top:0;bottom:0;width:500px;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);overflow-y:auto;z-index:9999;padding:20px}
-.close-pane{position:sticky;top:0;background:#fff;padding-bottom:8px;border-bottom:1px solid #e2e8f0;margin-bottom:12px;z-index:1}
-.stat-filter-btn{cursor:pointer;border:2px solid transparent;border-radius:10px;padding:10px;text-align:center;transition:all .2s;background:#fff}
+.priority-fix{font-size:.82rem;color:#475569;margin-top:6px;line-height:1.5}
+th{white-space:nowrap;font-size:.76rem;padding:8px 10px!important}
+td{font-size:.82rem;vertical-align:middle;padding:7px 10px!important}
+a{color:var(--blue)}
+#detailPane{display:none;position:fixed;right:0;top:0;bottom:0;width:520px;background:#fff;box-shadow:-6px 0 30px rgba(0,0,0,.14);overflow-y:auto;z-index:9999;padding:24px}
+.close-pane{position:sticky;top:0;background:#fff;padding-bottom:10px;border-bottom:1px solid #e2e8f0;margin-bottom:16px;z-index:1;display:flex;align-items:center;justify-content:space-between}
+.stat-filter-btn{cursor:pointer;border:2px solid transparent;border-radius:10px;padding:12px;text-align:center;transition:all .2s;background:#fff}
 .stat-filter-btn:hover{border-color:#2563eb;box-shadow:0 0 0 3px #2563eb22}
 .stat-filter-btn.active{border-color:var(--active-c,#2563eb);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-@media print{#detailPane{display:none!important}}
+@media print{
+  #detailPane{display:none!important}
+  .dyn-bg{display:none!important}
+  .hero{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .card{break-inside:avoid}
+  body{background:#fff}
+}
 </style>
 """
 
@@ -366,7 +418,13 @@ function pageScore(r){
   var cn=r['Canonical URL']?100:30;
   var rt2=r['Response Time (ms)']||0;
   var rts=rt2===0?0:rt2<500?100:rt2<1000?90:rt2<1500?75:rt2<2500?55:rt2<3500?30:10;
-  return Math.round((ts*20+ds*15+hs*15+ht*15+cn*10+rts*10)/85);
+  var wc=r['Word Count']||0;
+  var wcs=wc===0?0:wc<100?20:wc<300?55:wc<700?80:100;
+  var sds=r['Has Structured Data']?100:55;
+  var ogt=r['OG Title']?1:0,ogd=r['OG Description']?1:0,ogi=r['OG Image']?1:0;
+  var ogs=Math.round((ogt+ogd+ogi)/3*100);
+  // Weights: title=20, desc=15, h1=15, https=15, canonical=10, rt=10, wordcount=8, schema=4, og=3 → total=100
+  return Math.round((ts*20+ds*15+hs*15+ht*15+cn*10+rts*10+wcs*8+sds*4+ogs*3)/100);
 }
 
 // Hero
@@ -443,7 +501,7 @@ function applyFilter(f){
       +'<span class="ms-auto badge bg-light text-muted" style="font-size:.65rem">'+pct+'% affected · '+esc(it.impact)+' impact</span>'
       +'</div>'
       +'<div class="w-100 mb-1" style="height:4px;background:#fff8;border-radius:2px"><div style="height:4px;border-radius:2px;background:'+bc+';width:'+pct+'%"></div></div>'
-      +'<div style="font-size:.8rem;color:#475569">'+esc(it.fix)+'</div>'
+      +'<div class="priority-fix">'+esc(it.fix)+'</div>'
       +'</div>';
   }).join('');
 })();
@@ -582,16 +640,19 @@ function showDetail(i){
   var score=pageScore(r);var gd=gradeOf(score);
   var isWaf=r['WAF Blocked'];
   function pr(label,val,sub){
-    return '<div class="param-row"><div class="param-label">'+esc(label)+'</div>'
-      +'<div class="param-val">'+val+(sub?'<br><span style="color:#94a3b8;font-size:.72rem">'+esc(sub)+'</span>':'')+'</div></div>';
+    return '<div class="param-row">'
+      +'<div class="param-label">'+esc(label)+'</div>'
+      +'<div class="param-val">'+val+(sub?'<div class="param-sub">'+esc(sub)+'</div>':'')+'</div>'
+      +'</div>';
   }
   function prScore(label,val,sub,s){
     var g=gradeOf(s);
-    return '<div class="param-row"><div class="param-label">'+esc(label)+'</div>'
-      +'<div class="param-val">'+val+(sub?'<br><span style="color:'+g.c+';font-size:.72rem">'+esc(sub)+'</span>':'')+'</div>'
-      +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'
+    return '<div class="param-row">'
+      +'<div class="param-label">'+esc(label)+'</div>'
+      +'<div class="param-val">'+val+(sub?'<div class="param-sub" style="color:'+g.c+'">'+esc(sub)+'</div>':'')+'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;padding-top:2px">'
       +'<div class="score-bar-wrap"><div class="score-bar"><div class="score-bar-fill" style="width:'+s+'%;background:'+g.c+'"></div></div></div>'
-      +'<span class="grade-badge" style="color:'+g.c+';background:'+g.bg+'">'+s+' '+g.g+'</span>'
+      +'<span class="grade-badge" style="color:'+g.c+';background:'+g.bg+'">'+s+'&thinsp;'+g.g+'</span>'
       +'</div></div>';
   }
   var crits=(r['Critical Issues']||'').split(';').filter(Boolean);

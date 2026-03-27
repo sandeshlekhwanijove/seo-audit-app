@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { PageResult } from "@/lib/api";
-import { ChevronDown, ChevronRight, ExternalLink, Download } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Download, Printer } from "lucide-react";
 import Tooltip from "./Tooltip";
 import ScoreGauge from "./ScoreGauge";
 
@@ -194,13 +194,13 @@ function avg(...scores: number[]) {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function SinglePageReport({
   page,
+  pdfHref,
   htmlReportHref,
-  excelHref,
   onBack,
 }: {
   page: PageResult;
+  pdfHref?: string;
   htmlReportHref?: string;
-  excelHref?: string;
   onBack?: () => void;
 }) {
   const overall = computeScore(page);
@@ -263,17 +263,23 @@ export default function SinglePageReport({
             {page["Word Count"] && !isWaf ? ` · ${page["Word Count"]} words` : ""}
           </div>
         </div>
-        <div className="flex gap-2 flex-shrink-0">
+        <div className="flex gap-2 flex-shrink-0 flex-wrap">
+          {pdfHref && (
+            <a href={pdfHref} download className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white text-[#1a3c5e] hover:bg-blue-50 transition-colors shadow-sm">
+              <Download size={13} /> PDF Report
+            </a>
+          )}
           {htmlReportHref && (
             <a href={htmlReportHref} download className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">
-              <Download size={13} /> HTML Report
+              <Download size={13} /> HTML
             </a>
           )}
-          {excelHref && (
-            <a href={excelHref} download className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">
-              <Download size={13} /> Excel
-            </a>
-          )}
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <Printer size={13} /> Print
+          </button>
         </div>
       </div>
 

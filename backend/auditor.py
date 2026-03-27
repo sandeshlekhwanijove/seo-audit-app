@@ -254,8 +254,12 @@ def _wait_for_real_content(page, min_chars: int = 800, timeout_s: int = 30) -> d
 
         if char_count == last_len:
             stall_ticks += 1
-            if stall_ticks >= 5:
-                break
+            # If content has stabilised (not growing) and there's enough text, accept it
+            if stall_ticks >= 3:
+                if char_count >= min_chars // 2 and not has_skeleton:
+                    return {"is_challenge": False, "timed_out": False, "final_chars": char_count}
+                if stall_ticks >= 6:
+                    break
         else:
             stall_ticks = 0
         last_len = char_count
@@ -266,7 +270,10 @@ def _wait_for_real_content(page, min_chars: int = 800, timeout_s: int = 30) -> d
         char_count = page.evaluate(text_js)
     except Exception:
         title, char_count = "", 0
-    return {"is_challenge": _is_challenge_title(title), "timed_out": True, "final_chars": char_count}
+    # Only flag timed_out if content is genuinely sparse — pages with sufficient
+    # text that just loaded slowly should not generate a misleading warning.
+    timed_out = char_count < 200
+    return {"is_challenge": _is_challenge_title(title), "timed_out": timed_out, "final_chars": char_count}
 
 
 # ---------------------------------------------------------------------------

@@ -171,6 +171,10 @@ export function excelDownloadUrl(jobId: string): string {
   return `${BASE}/api/audit/download/${jobId}/excel`;
 }
 
+export function pdfReportUrl(jobId: string): string {
+  return `${BASE}/api/audit/download/${jobId}/pdf`;
+}
+
 export function htmlReportUrl(jobId: string): string {
   return `${BASE}/api/audit/download/${jobId}/report`;
 }

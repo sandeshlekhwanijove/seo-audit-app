@@ -9,7 +9,7 @@ import ResultsTable from "@/components/ResultsTable";
 import PriorityImprovements from "@/components/PriorityImprovements";
 import SFComparison from "@/components/SFComparison";
 import SinglePageReport from "@/components/SinglePageReport";
-import { startAudit, getStatus, getResults, excelDownloadUrl, htmlReportUrl, AuditStatus, AuditResults } from "@/lib/api";
+import { startAudit, getStatus, getResults, excelDownloadUrl, htmlReportUrl, pdfReportUrl, AuditStatus, AuditResults } from "@/lib/api";
 
 type Phase = "idle" | "running" | "done" | "error";
 export type FilterMode = "critical" | "warning" | "indexable" | "non-indexable" | "waf" | "all" | null;
@@ -39,7 +39,7 @@ function StatCard({ label, value, sub, color = "#2563eb", active, onClick }: {
 
 export default function Home() {
   const [url, setUrl]           = useState("");
-  const [mode, setMode]         = useState<"page" | "site" | "sitemap">("site");
+  const [mode, setMode]         = useState<"page" | "site" | "sitemap">("page");
   const [maxPages, setMaxPages] = useState(50);
 
   const [delay, setDelay]       = useState(1);
@@ -127,24 +127,29 @@ export default function Home() {
       {/* ── Navigation bar ─────────────────────────────────────────────────── */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <button
+            onClick={reset}
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+          >
             <div className="w-8 h-8 rounded-lg bg-[#1a3c5e] flex items-center justify-center">
               <Flame size={16} className="text-orange-400" />
             </div>
             <span className="font-bold text-[#1a3c5e] text-sm tracking-tight">SEO Audit Tool</span>
-            <span className="text-slate-300 text-sm">|</span>
-            <span className="text-xs text-slate-500">Screaming Frog-level insights</span>
-          </div>
+          </button>
           {phase === "done" && results && (
             <div className="flex items-center gap-2">
-              <a href={htmlReportUrl(results.job_id)} download
-                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-300 hover:bg-blue-50 text-blue-700 transition-colors">
-                <Download size={13} /> HTML Report
-              </a>
-              <a href={excelDownloadUrl(results.job_id)} download
-                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors">
-                <Download size={13} /> Excel
-              </a>
+              {results.results.length > 1 && (
+                <>
+                  <a href={htmlReportUrl(results.job_id)} download
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-300 hover:bg-blue-50 text-blue-700 transition-colors">
+                    <Download size={13} /> HTML Report
+                  </a>
+                  <a href={excelDownloadUrl(results.job_id)} download
+                    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors">
+                    <Download size={13} /> Excel
+                  </a>
+                </>
+              )}
               <button onClick={reset}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1a3c5e] hover:bg-[#142f4a] text-white transition-colors">
                 <RefreshCw size={13} /> New Audit
@@ -163,7 +168,7 @@ export default function Home() {
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-700 text-xs font-bold px-3 py-1.5 rounded-full mb-4">
                 <Flame size={13} className="text-orange-500" />
-                Screaming Frog-level analysis · Real browser · No install needed
+                Real browser · 20+ signals · No install needed
               </div>
               <h1 className="text-4xl font-extrabold text-[#1a3c5e] mb-3 tracking-tight">
                 Technical SEO Audit Tool
@@ -233,18 +238,30 @@ export default function Home() {
                 </button>
 
                 {showAdv && (
-                  <div className="grid grid-cols-2 gap-4 bg-slate-50 rounded-xl p-4">
+                  <div className={`grid gap-4 bg-slate-50 rounded-xl p-4 ${mode === "page" ? "grid-cols-1" : "grid-cols-2"}`}>
+                    {mode !== "page" && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">
+                          Max pages (1–200)
+                        </label>
+                        <input type="number" min={1} max={200} value={maxPages}
+                          onChange={e => setMaxPages(Number(e.target.value))}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3c5e]/30" />
+                        <p className="text-xs text-slate-400 mt-1">
+                          {mode === "sitemap" ? "Limit how many sitemap URLs to audit" : "Maximum pages to crawl from the start URL"}
+                        </p>
+                      </div>
+                    )}
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Max pages (1–200)</label>
-                      <input type="number" min={1} max={200} value={maxPages}
-                        onChange={e => setMaxPages(Number(e.target.value))}
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3c5e]/30" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Delay between pages (seconds)</label>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">
+                        {mode === "page" ? "Browser wait timeout (seconds)" : "Delay between pages (seconds)"}
+                      </label>
                       <input type="number" min={0} max={10} step={0.5} value={delay}
                         onChange={e => setDelay(Number(e.target.value))}
                         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3c5e]/30" />
+                      <p className="text-xs text-slate-400 mt-1">
+                        {mode === "page" ? "Extra seconds to wait for JS content to fully render" : "Pause between page audits — increase for polite crawling"}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -336,8 +353,8 @@ export default function Home() {
         {phase === "done" && results && sum && results.results.length === 1 && (
           <SinglePageReport
             page={results.results[0]}
+            pdfHref={pdfReportUrl(results.job_id)}
             htmlReportHref={htmlReportUrl(results.job_id)}
-            excelHref={excelDownloadUrl(results.job_id)}
             onBack={reset}
           />
         )}
@@ -407,7 +424,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="mt-16 border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-400">
-        SEO Audit Tool · Built with FastAPI + Next.js · Powered by Playwright
+        © {new Date().getFullYear()} SEO Audit Tool · All rights reserved
       </footer>
     </div>
   );
