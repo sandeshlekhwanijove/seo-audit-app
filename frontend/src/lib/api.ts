@@ -4,7 +4,7 @@ const BASE = _raw.startsWith("http") ? _raw : `https://${_raw}`;
 
 export interface AuditRequest {
   url: string;
-  mode: "page" | "site";
+  mode: "page" | "site" | "sitemap";
   max_pages?: number;
   delay_s?: number;
 }

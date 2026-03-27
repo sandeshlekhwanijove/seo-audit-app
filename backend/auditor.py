@@ -4,6 +4,7 @@ Extracted from master_analyser.py; no Flask/UI dependencies.
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import re
 import time
@@ -13,6 +14,7 @@ from collections import deque
 from datetime import datetime
 from typing import Callable, Optional
 from urllib.parse import urlparse, urljoin, urlunparse
+from xml.etree import ElementTree as ET
 
 try:
     import textstat
@@ -691,6 +693,51 @@ def _detect_duplicates(results: list[dict]) -> list[dict]:
             r["Duplicate Content"] = False
             r["Duplicate Of"] = ""
     return results
+
+
+# ---------------------------------------------------------------------------
+# Sitemap parser
+# ---------------------------------------------------------------------------
+def _fetch_sitemap_urls(sitemap_url: str, _depth: int = 0) -> list[str]:
+    """Recursively fetch and parse an XML sitemap (or sitemap index), returning page URLs."""
+    if _depth > 3:
+        return []
+    urls: list[str] = []
+    try:
+        req = urllib.request.Request(
+            sitemap_url,
+            headers={
+                "User-Agent": _UA,
+                "Accept-Encoding": "gzip, deflate",
+                "Accept": "application/xml,text/xml,*/*",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read()
+            encoding = resp.headers.get("Content-Encoding", "")
+        if encoding == "gzip" or sitemap_url.lower().endswith(".gz"):
+            raw = gzip.decompress(raw)
+        root = ET.fromstring(raw)
+        ns = root.tag.split("}")[0].lstrip("{") if "}" in root.tag else ""
+
+        def q(tag: str) -> str:
+            return f"{{{ns}}}{tag}" if ns else tag
+
+        # Sitemap index → recurse into each child sitemap
+        if "sitemapindex" in root.tag.lower():
+            for sm in root.findall(q("sitemap")):
+                loc = sm.find(q("loc"))
+                if loc is not None and (loc.text or "").strip():
+                    urls.extend(_fetch_sitemap_urls(loc.text.strip(), _depth + 1))
+        else:
+            # urlset → extract <loc> entries
+            for url_el in root.findall(q("url")):
+                loc = url_el.find(q("loc"))
+                if loc is not None and (loc.text or "").strip():
+                    urls.append(loc.text.strip())
+    except Exception:
+        pass
+    return urls
 
 
 # ---------------------------------------------------------------------------

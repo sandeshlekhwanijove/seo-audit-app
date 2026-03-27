@@ -8,6 +8,7 @@ import ChartsRow from "@/components/ChartsRow";
 import ResultsTable from "@/components/ResultsTable";
 import PriorityImprovements from "@/components/PriorityImprovements";
 import SFComparison from "@/components/SFComparison";
+import SinglePageReport from "@/components/SinglePageReport";
 import { startAudit, getStatus, getResults, excelDownloadUrl, htmlReportUrl, AuditStatus, AuditResults } from "@/lib/api";
 
 type Phase = "idle" | "running" | "done" | "error";
@@ -38,8 +39,9 @@ function StatCard({ label, value, sub, color = "#2563eb", active, onClick }: {
 
 export default function Home() {
   const [url, setUrl]           = useState("");
-  const [mode, setMode]         = useState<"page" | "site">("site");
+  const [mode, setMode]         = useState<"page" | "site" | "sitemap">("site");
   const [maxPages, setMaxPages] = useState(50);
+
   const [delay, setDelay]       = useState(1);
   const [showAdv, setShowAdv]   = useState(false);
 
@@ -175,33 +177,53 @@ export default function Home() {
             {/* Form card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 max-w-3xl mx-auto">
               <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Website URL
-                    </label>
-                    <input
-                      type="text"
-                      value={url}
-                      onChange={e => setUrl(e.target.value)}
-                      placeholder="https://example.com"
-                      required
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3c5e]/30 focus:border-[#1a3c5e]"
-                    />
-                  </div>
-                  <div className="w-44">
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
-                      Mode
-                    </label>
-                    <select
-                      value={mode}
-                      onChange={e => setMode(e.target.value as "page" | "site")}
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3c5e]/30 bg-white"
+                {/* Mode tabs */}
+                <div className="flex gap-2 mb-1">
+                  {([
+                    { v: "site", label: "🔍 Site Crawl", desc: "Follow internal links, crawl up to 200 pages" },
+                    { v: "sitemap", label: "🗺 Sitemap", desc: "Paste a sitemap.xml URL — audit every listed page" },
+                    { v: "page", label: "📄 Single Page", desc: "Deep-dive report for one URL" },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setMode(opt.v)}
+                      className={`flex-1 px-3 py-2.5 rounded-xl text-sm font-semibold border transition-all text-left
+                        ${mode === opt.v
+                          ? "border-[#1a3c5e] bg-[#1a3c5e] text-white shadow-md"
+                          : "border-slate-200 text-slate-600 hover:border-[#1a3c5e] hover:text-[#1a3c5e]"}`}
                     >
-                      <option value="site">Full Site Crawl</option>
-                      <option value="page">Single Page</option>
-                    </select>
-                  </div>
+                      <div>{opt.label}</div>
+                      <div className={`text-xs mt-0.5 font-normal ${mode === opt.v ? "text-blue-200" : "text-slate-400"}`}>
+                        {opt.desc}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+                    {mode === "sitemap" ? "Sitemap XML URL" : mode === "page" ? "Page URL" : "Website URL"}
+                  </label>
+                  <input
+                    type="text"
+                    value={url}
+                    onChange={e => setUrl(e.target.value)}
+                    placeholder={
+                      mode === "sitemap"
+                        ? "https://example.com/sitemap.xml"
+                        : mode === "page"
+                        ? "https://example.com/specific-page"
+                        : "https://example.com"
+                    }
+                    required
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a3c5e]/30 focus:border-[#1a3c5e]"
+                  />
+                  {mode === "sitemap" && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Supports sitemap indexes (e.g. sitemap-index.xml), gzip sitemaps, and nested sitemaps.
+                    </p>
+                  )}
                 </div>
 
                 <button type="button" onClick={() => setShowAdv(v => !v)}
@@ -283,8 +305,12 @@ export default function Home() {
             <div className="flex items-center gap-3 mb-6">
               <Loader2 size={22} className="text-[#1a3c5e] animate-spin" />
               <div>
-                <h2 className="font-bold text-[#1a3c5e]">Audit in progress…</h2>
-                <p className="text-xs text-slate-400 mt-0.5">The browser is crawling and scoring each page</p>
+                <h2 className="font-bold text-[#1a3c5e]">
+                  {mode === "page" ? "Auditing page…" : mode === "sitemap" ? "Crawling sitemap…" : "Site crawl in progress…"}
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {mode === "page" ? "Loading page with headless Chrome and scoring all SEO signals" : "Rendering each page with headless Chrome · this takes a moment per page"}
+                </p>
               </div>
             </div>
             <div className="mb-3">
@@ -306,17 +332,32 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── Results dashboard ─────────────────────────────────────────────── */}
-        {phase === "done" && results && sum && (
+        {/* ── Results: single page view ─────────────────────────────────────── */}
+        {phase === "done" && results && sum && results.results.length === 1 && (
+          <SinglePageReport
+            page={results.results[0]}
+            htmlReportHref={htmlReportUrl(results.job_id)}
+            excelHref={excelDownloadUrl(results.job_id)}
+            onBack={reset}
+          />
+        )}
+
+        {/* ── Results: site / sitemap dashboard ─────────────────────────────── */}
+        {phase === "done" && results && sum && results.results.length > 1 && (
           <div className="fade-up">
 
             {/* Page header */}
-            <div className="flex items-start justify-between mb-6">
+            <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
               <div>
-                <h2 className="text-xl font-extrabold text-[#1a3c5e]">
-                  {results.request?.url?.replace(/^https?:\/\//, "")}
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h2 className="text-xl font-extrabold text-[#1a3c5e]">
+                    {results.request?.url?.replace(/^https?:\/\//, "").substring(0, 60)}
+                  </h2>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                    {results.request?.mode === "sitemap" ? "Sitemap Crawl" : "Site Crawl"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
                   {sum.total} page{sum.total !== 1 ? "s" : ""} audited
                   {results.finished_at && ` · ${new Date(results.finished_at).toLocaleString()}`}
                 </p>
@@ -325,13 +366,10 @@ export default function Home() {
 
             {/* ── Score + summary stats ── */}
             <div className="grid grid-cols-12 gap-4 mb-6">
-              {/* Score card */}
               <div className="col-span-12 sm:col-span-4 lg:col-span-3 bg-[#1a3c5e] rounded-2xl p-6 flex flex-col items-center justify-center shadow-md">
                 <div className="text-xs text-blue-200 uppercase tracking-widest font-semibold mb-3">Overall SEO Score</div>
                 <ScoreGauge score={sum.score} />
               </div>
-
-              {/* Stats grid — all clickable to filter the table */}
               <div className="col-span-12 sm:col-span-8 lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <StatCard label="Pages Audited"   value={sum.total}          color="#1a3c5e"
                   active={filterMode === "all"} onClick={() => toggleFilter("all")} sub="click to show all" />
@@ -348,28 +386,20 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Priority improvements — shown first */}
             <PriorityImprovements results={results.results} summary={sum} />
-
-            {/* Wins & Issues */}
             <WinsIssues results={results.results} summary={sum} />
-
-            {/* Charts */}
             <ChartsRow results={results.results} summary={sum} />
 
-            {/* Divider */}
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-1 h-px bg-slate-200" />
               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Page-by-page results</span>
               <div className="flex-1 h-px bg-slate-200" />
             </div>
 
-            {/* Table */}
             <div id="results-table">
               <ResultsTable results={results.results} filterMode={filterMode} onClearFilter={() => setFilterMode(null)} />
             </div>
 
-            {/* Screaming Frog comparison */}
             <SFComparison />
           </div>
         )}

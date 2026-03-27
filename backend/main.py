@@ -7,6 +7,7 @@ from __future__ import annotations
 import io
 import os
 import threading
+import time
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -67,15 +68,15 @@ def _update_job(job_id: str, **kwargs):
 # ---------------------------------------------------------------------------
 class AuditRequest(BaseModel):
     url: str
-    mode: str = "site"        # "page" | "site"
+    mode: str = "site"        # "page" | "site" | "sitemap"
     max_pages: int = 50
     delay_s: float = 1.0
 
     @field_validator("mode")
     @classmethod
     def mode_must_be_valid(cls, v):
-        if v not in ("page", "site"):
-            raise ValueError("mode must be 'page' or 'site'")
+        if v not in ("page", "site", "sitemap"):
+            raise ValueError("mode must be 'page', 'site', or 'sitemap'")
         return v
 
     @field_validator("max_pages")
@@ -98,7 +99,35 @@ def _run_audit(job_id: str, req: AuditRequest):
             result = auditor.audit_page(req.url)
             results = [result]
             _update_job(job_id, progress=100)
-        else:
+
+        elif req.mode == "sitemap":
+            # Parse sitemap, then audit each URL individually
+            _update_job(job_id, current_url="Fetching sitemap…")
+            sitemap_urls = auditor._fetch_sitemap_urls(req.url)
+            sitemap_urls = sitemap_urls[:req.max_pages]
+            n = max(len(sitemap_urls), 1)
+            for i, sm_url in enumerate(sitemap_urls):
+                _update_job(job_id, current_url=sm_url,
+                            pages_done=i, progress=round(i / n * 100))
+                try:
+                    r = auditor.audit_page(sm_url)
+                    r["Crawl Depth"] = 0
+                    r["Robots.txt Sitemaps"] = req.url
+                    results.append(r)
+                except Exception as ex:
+                    results.append({
+                        "URL": sm_url, "Final URL": sm_url,
+                        "Status Code": 0,
+                        "Critical Issues": f"Crawl failed: {str(ex)[:200]}",
+                        "Warnings": "", "Info": "",
+                        "Critical Count": 1, "Warning Count": 0, "Info Count": 0,
+                    })
+                if req.delay_s > 0:
+                    time.sleep(req.delay_s)
+            results = auditor._detect_duplicates(results)
+            _update_job(job_id, progress=100)
+
+        else:  # "site"
             def _progress(done: int, total: int, url: str):
                 pct = round(done / max(total, 1) * 100)
                 _update_job(job_id, progress=pct, current_url=url,
@@ -616,6 +645,30 @@ function showDetail(i){
   document.getElementById('detailPane').style.display='block';
 }
 function closePane(){document.getElementById('detailPane').style.display='none';}
+
+// ── Auto single-page mode ────────────────────────────────────────────────────
+if(RESULTS.length===1){
+  // Hide table, hero stats, and wins/issues for single page; show inline detail
+  var ts=document.getElementById('tableSection');if(ts)ts.style.display='none';
+  var ws=document.getElementById('winsSection');if(ws)ws.style.display='none';
+  var dp=document.getElementById('detailPane');
+  if(dp){
+    dp.style.position='relative';
+    dp.style.width='100%';
+    dp.style.height='auto';
+    dp.style.top='auto';
+    dp.style.right='auto';
+    dp.style.boxShadow='none';
+    dp.style.borderRadius='12px';
+    dp.style.border='1px solid #e2e8f0';
+    dp.style.background='#fff';
+    dp.style.padding='0';
+    dp.style.display='block';
+    // Hide close button for single page
+    var cp=dp.querySelector('.close-pane');if(cp)cp.style.display='none';
+  }
+  showDetail(0);
+}
 })();
 </script>
 """
