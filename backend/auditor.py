@@ -4,9 +4,11 @@ Extracted from master_analyser.py; no Flask/UI dependencies.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 import os
+import urllib.request
 from collections import deque
 from datetime import datetime
 from typing import Callable, Optional
@@ -484,6 +486,13 @@ def _classify_seo_issues(data: dict) -> dict:
     if not data.get("Has Hreflang"):
         info.append("No hreflang tags (may be intentional for single-language sites)")
 
+    if data.get("Duplicate Content"):
+        dup_of = data.get("Duplicate Of") or "another page"
+        warnings.append(f"Duplicate content detected — identical body text as {dup_of[:60]}")
+
+    if data.get("Blocked by robots.txt"):
+        warnings.append("URL is disallowed by robots.txt rules")
+
     return {"critical": critical, "warnings": warnings, "info": info}
 
 
@@ -595,6 +604,96 @@ def audit_page(url: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# robots.txt parser
+# ---------------------------------------------------------------------------
+def _fetch_robots_txt(base_url: str) -> dict:
+    """Fetch and parse robots.txt, returning disallow rules, sitemaps, crawl-delay."""
+    parsed = urlparse(base_url)
+    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+    result: dict = {
+        "found": False, "url": robots_url, "sitemaps": [],
+        "disallowed_paths": [], "crawl_delay": None,
+    }
+    try:
+        req = urllib.request.Request(robots_url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            content = resp.read().decode("utf-8", errors="ignore")
+        result["found"] = True
+        current_agents: list[str] = []
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if ":" not in line:
+                continue
+            directive, _, value = line.partition(":")
+            directive = directive.strip().lower()
+            value = value.strip()
+            if directive == "user-agent":
+                current_agents = [value.lower()]
+            elif directive == "sitemap":
+                if value and value not in result["sitemaps"]:
+                    result["sitemaps"].append(value)
+            elif directive == "disallow":
+                if value and any(a in ("*", "googlebot") for a in current_agents):
+                    if value not in result["disallowed_paths"]:
+                        result["disallowed_paths"].append(value)
+            elif directive == "crawl-delay":
+                if any(a in ("*", "googlebot") for a in current_agents):
+                    try:
+                        result["crawl_delay"] = float(value)
+                    except ValueError:
+                        pass
+    except Exception:
+        pass
+    return result
+
+
+def _is_blocked_by_robots(url: str, robots: dict) -> bool:
+    """Check if a URL path is disallowed by robots.txt rules."""
+    if not robots.get("disallowed_paths"):
+        return False
+    path = urlparse(url).path or "/"
+    for rule in robots["disallowed_paths"]:
+        if rule == "/":
+            return True  # All paths blocked
+        if path.startswith(rule):
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Duplicate content detection
+# ---------------------------------------------------------------------------
+def _detect_duplicates(results: list[dict]) -> list[dict]:
+    """Mark pages with duplicate body content using MD5 hash comparison."""
+    hash_to_urls: dict[str, list[str]] = {}
+    for r in results:
+        text = r.get("_body_text") or ""
+        if len(text) < 150:  # Too short to meaningfully detect
+            continue
+        h = hashlib.md5(text.strip().lower().encode("utf-8")).hexdigest()
+        hash_to_urls.setdefault(h, []).append(r["URL"])
+
+    for r in results:
+        text = r.get("_body_text") or ""
+        if len(text) < 150 or r.get("WAF Blocked"):
+            r["Duplicate Content"] = False
+            r["Duplicate Of"] = ""
+            continue
+        h = hashlib.md5(text.strip().lower().encode("utf-8")).hexdigest()
+        urls = hash_to_urls.get(h, [])
+        if len(urls) > 1:
+            r["Duplicate Content"] = True
+            others = [u for u in urls if u != r["URL"]]
+            r["Duplicate Of"] = others[0] if others else ""
+        else:
+            r["Duplicate Content"] = False
+            r["Duplicate Of"] = ""
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Site crawler (BFS)
 # ---------------------------------------------------------------------------
 def crawl_site(
@@ -612,6 +711,9 @@ def crawl_site(
     queue: deque = deque([start_url])
     visited: set = set()
     results: list = []
+
+    # Fetch robots.txt once for the whole crawl
+    robots_info = _fetch_robots_txt(start_url)
 
     try:
         with sync_playwright() as p:
@@ -690,6 +792,9 @@ def crawl_site(
                                                html_size, dom_data,
                                                ttfb_ms=ttfb, full_load_ms=full_load_time)
                     data["Crawl Depth"] = url.count("/") - start_url.count("/")
+                    data["Blocked by robots.txt"] = _is_blocked_by_robots(url, robots_info)
+                    data["Robots.txt Sitemaps"] = ", ".join(robots_info.get("sitemaps", []))
+                    # Duplicate content & Duplicate Of added later by _detect_duplicates
                     results.append(data)
 
                     # Only follow links from non-WAF pages
@@ -725,6 +830,9 @@ def crawl_site(
             "Warnings": "", "Info": "",
             "Critical Count": 1, "Warning Count": 0, "Info Count": 0,
         })
+
+    # Post-process: detect duplicate content across all crawled pages
+    results = _detect_duplicates(results)
 
     return results
 

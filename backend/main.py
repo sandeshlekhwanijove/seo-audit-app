@@ -269,390 +269,445 @@ def download_html_report(job_id: str):
     )
 
 
-def _build_html_report(data_json: str, site_url: str, generated_at: str) -> str:
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SEO Audit Report — {site_url}</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+
+# ─── HTML Report constants (pure strings — no f-string, so JS/CSS {} are literal) ──
+_R_CSS = """
 <style>
-  :root{{--navy:#1a3c5e;--blue:#2563eb}}
-  body{{font-family:'Segoe UI',sans-serif;background:#f8fafc;color:#1e293b}}
-  .hero{{background:linear-gradient(135deg,var(--navy),#2d7dd2);color:#fff;padding:2.5rem 0}}
-  .score-circle{{width:110px;height:110px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:2rem;margin:0 auto;border:6px solid rgba(255,255,255,.3)}}
-  .card{{border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 8px rgba(0,0,0,.05)}}
-  .stat-val{{font-size:1.8rem;font-weight:900;line-height:1}}
-  .param-row{{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9}}
-  .param-row:last-child{{border-bottom:0}}
-  .param-label{{width:160px;flex-shrink:0;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b}}
-  .param-val{{flex:1;font-size:.84rem;color:#1e293b}}
-  .grade-badge{{font-size:.75rem;font-weight:800;padding:2px 8px;border-radius:6px}}
-  .score-bar-wrap{{width:80px;flex-shrink:0}}
-  .score-bar{{height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden}}
-  .score-bar-fill{{height:100%;border-radius:3px;transition:width .8s}}
-  .section-hdr{{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;margin:16px 0 4px}}
-  .issue-crit{{color:#dc2626}} .issue-warn{{color:#d97706}} .issue-info{{color:#2563eb}}
-  .row-crit{{border-left:3px solid #ef4444}} .row-warn{{border-left:3px solid #f59e0b}}
-  .row-ok{{border-left:3px solid #10b981}} .row-waf{{border-left:3px solid #7c3aed;background:#faf5ff}}
-  .win-item,.issue-item{{padding:8px 0;border-bottom:1px solid #f8fafc;font-size:.85rem;display:flex;align-items:start;gap:8px}}
-  .win-item:last-child,.issue-item:last-child{{border-bottom:0}}
-  .priority-card{{border-left:4px solid #dc2626;background:#fff5f5;border-radius:0 10px 10px 0;padding:12px 16px;margin-bottom:10px}}
-  .priority-card.warn{{border-color:#f59e0b;background:#fffbeb}}
-  .priority-card.opp{{border-color:#2563eb;background:#eff6ff}}
-  th{{white-space:nowrap;font-size:.75rem}}
-  td{{font-size:.8rem;vertical-align:middle}}
-  #detailPane{{display:none;position:fixed;right:0;top:0;bottom:0;width:480px;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);overflow-y:auto;z-index:1000;padding:20px}}
-  .close-pane{{position:sticky;top:0;background:#fff;padding-bottom:8px;border-bottom:1px solid #e2e8f0;margin-bottom:12px}}
-  @media print{{#detailPane{{display:none!important}}}}
+:root{--navy:#1a3c5e;--blue:#2563eb}
+body{font-family:'Segoe UI',sans-serif;background:#f8fafc;color:#1e293b;position:relative}
+.dyn-bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.dyn-bg span{position:absolute;border-radius:50%;filter:blur(90px)}
+.dyn-bg span:nth-child(1){width:600px;height:600px;background:radial-gradient(circle,#2563eb22,transparent 70%);top:-150px;left:-150px;animation:bgf1 28s ease-in-out infinite}
+.dyn-bg span:nth-child(2){width:500px;height:500px;background:radial-gradient(circle,#1a3c5e18,transparent 70%);bottom:-100px;right:-100px;animation:bgf2 35s ease-in-out infinite}
+@keyframes bgf1{0%,100%{transform:translate(0,0)}50%{transform:translate(50px,-40px)}}
+@keyframes bgf2{0%,100%{transform:translate(0,0)}50%{transform:translate(-40px,50px)}}
+.hero{background:linear-gradient(135deg,var(--navy),#2d7dd2);color:#fff;padding:2.5rem 0;position:relative;z-index:1}
+.score-circle{width:100px;height:100px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:2rem;margin:0 auto;border:5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08)}
+.card{border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 8px rgba(0,0,0,.05);position:relative;z-index:1}
+.param-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9}
+.param-row:last-child{border-bottom:0}
+.param-label{width:160px;flex-shrink:0;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b}
+.param-val{flex:1;font-size:.84rem;color:#1e293b}
+.grade-badge{font-size:.75rem;font-weight:800;padding:2px 8px;border-radius:6px}
+.score-bar-wrap{width:80px;flex-shrink:0}
+.score-bar{height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:3px}
+.section-hdr{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;margin:16px 0 4px}
+.issue-crit{color:#dc2626}.issue-warn{color:#d97706}.issue-info{color:#2563eb}
+.row-crit{border-left:3px solid #ef4444}.row-warn{border-left:3px solid #f59e0b}
+.row-ok{border-left:3px solid #10b981}.row-waf{border-left:3px solid #7c3aed;background:#faf5ff}
+.win-item,.issue-item{padding:8px 0;border-bottom:1px solid #f8fafc;font-size:.85rem;display:flex;align-items:start;gap:8px}
+.win-item:last-child,.issue-item:last-child{border-bottom:0}
+.priority-card{border-left:4px solid #dc2626;background:#fff5f5;border-radius:0 10px 10px 0;padding:12px 16px;margin-bottom:10px}
+.priority-card.warn{border-color:#f59e0b;background:#fffbeb}
+.priority-card.opp{border-color:#2563eb;background:#eff6ff}
+th{white-space:nowrap;font-size:.75rem}
+td{font-size:.8rem;vertical-align:middle}
+#detailPane{display:none;position:fixed;right:0;top:0;bottom:0;width:500px;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);overflow-y:auto;z-index:9999;padding:20px}
+.close-pane{position:sticky;top:0;background:#fff;padding-bottom:8px;border-bottom:1px solid #e2e8f0;margin-bottom:12px;z-index:1}
+.stat-filter-btn{cursor:pointer;border:2px solid transparent;border-radius:10px;padding:10px;text-align:center;transition:all .2s;background:#fff}
+.stat-filter-btn:hover{border-color:#2563eb;box-shadow:0 0 0 3px #2563eb22}
+.stat-filter-btn.active{border-color:var(--active-c,#2563eb);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+@media print{#detailPane{display:none!important}}
 </style>
-</head>
-<body>
-<div class="hero mb-4">
-  <div class="container">
-    <div class="d-flex align-items-center gap-3 mb-3">
-      <div style="width:38px;height:38px;background:rgba(255,255,255,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff">S</div>
-      <div><div class="fw-bold">SEO Audit Report</div><div class="opacity-75 small">{site_url}</div></div>
-      <div class="ms-auto opacity-60 small">{generated_at[:10]}</div>
-    </div>
-    <div class="row g-3 align-items-center">
-      <div class="col-auto">
-        <div class="score-circle" id="heroScore" style="color:#fff">—</div>
-        <div class="text-center mt-1 small opacity-75" id="heroGrade"></div>
-      </div>
-      <div class="col">
-        <div class="row g-2" id="heroStats"></div>
-      </div>
-    </div>
-  </div>
-</div>
+"""
 
-<div class="container pb-5">
-
-  <!-- Priority Improvements -->
-  <div class="card p-4 mb-4">
-    <h5 class="fw-bold mb-3" style="color:var(--navy)">🎯 Priority Improvements</h5>
-    <div id="priorityList"><div class="text-muted small">Loading…</div></div>
-  </div>
-
-  <!-- Wins & Issues -->
-  <div class="row g-3 mb-4">
-    <div class="col-lg-6">
-      <div class="card p-4 h-100">
-        <h6 class="fw-bold text-success mb-3">✅ What's Working Well</h6>
-        <div id="winsList"></div>
-      </div>
-    </div>
-    <div class="col-lg-6">
-      <div class="card p-4 h-100">
-        <h6 class="fw-bold text-danger mb-3">⚠️ What Needs Attention</h6>
-        <div id="issuesList"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Pages table -->
-  <div class="card p-0 mb-4 overflow-hidden">
-    <div class="px-4 py-3 border-bottom" style="background:var(--navy)">
-      <span class="text-white fw-bold">All Pages</span>
-      <span class="text-white opacity-60 small ms-2">click any row to see full breakdown</span>
-    </div>
-    <div class="table-responsive">
-      <table id="auditTable" class="table table-hover mb-0">
-        <thead class="table-dark">
-          <tr>
-            <th>URL</th><th>Status</th><th>TTFB</th><th>Score</th>
-            <th title="Title Length">TL</th><th title="Description Length">DL</th>
-            <th>H1</th><th>Words</th><th>Canon</th><th>Idx</th>
-            <th>Crit</th><th>Warn</th><th>Top Issue</th>
-          </tr>
-        </thead>
-        <tbody id="auditBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Screaming Frog comparison -->
-  <div class="card p-4 mb-4">
-    <h5 class="fw-bold mb-3" style="color:var(--navy)">📋 Coverage vs. Screaming Frog</h5>
-    <div class="table-responsive">
-      <table class="table table-sm table-bordered" style="font-size:.8rem">
-        <thead class="table-light"><tr><th>Signal</th><th>This Tool</th><th>Screaming Frog</th><th>Notes</th></tr></thead>
-        <tbody id="sfTable"></tbody>
-      </table>
-    </div>
-  </div>
-
-</div>
-
-<!-- Detail pane -->
-<div id="detailPane">
-  <div class="close-pane d-flex justify-content-between align-items-center">
-    <strong>Page Detail</strong>
-    <button class="btn btn-sm btn-outline-secondary" onclick="closePane()">✕ Close</button>
-  </div>
-  <div id="detailContent"></div>
-</div>
-
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+_R_JS = r"""
 <script>
-const DATA = {data_json};
-const {{summary: SUM, results: RESULTS}} = DATA;
+(function(){
+var D = JSON.parse(document.getElementById('__audit_data__').textContent);
+var SUM = D.summary, RESULTS = D.results;
+var activeFilter = null;
 
-function gradeOf(s){{
-  if(s>=90)return{{g:'A',c:'#059669',bg:'#d1fae5'}};
-  if(s>=75)return{{g:'B',c:'#16a34a',bg:'#dcfce7'}};
-  if(s>=55)return{{g:'C',c:'#d97706',bg:'#fef3c7'}};
-  if(s>=35)return{{g:'D',c:'#ea580c',bg:'#ffedd5'}};
-  return{{g:'F',c:'#dc2626',bg:'#fee2e2'}};
-}}
-function esc(s){{return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}}
-
-function pageScore(r){{
+function gradeOf(s){
+  if(s>=90)return{g:'A',c:'#059669',bg:'#d1fae5'};
+  if(s>=75)return{g:'B',c:'#16a34a',bg:'#dcfce7'};
+  if(s>=55)return{g:'C',c:'#d97706',bg:'#fef3c7'};
+  if(s>=35)return{g:'D',c:'#ea580c',bg:'#ffedd5'};
+  return{g:'F',c:'#dc2626',bg:'#fee2e2'};
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function pageScore(r){
   if(r['WAF Blocked'])return 0;
-  const tl=r['Title Length']||0,dl=r['Meta Description Length']||0,h1=r['H1 Count']||0;
-  const ts=tl===0?0:tl>=30&&tl<=60?100:tl<20?25:tl<30?60:tl<=70?72:35;
-  const ds=dl===0?0:dl>=70&&dl<=160?100:dl<50?30:dl<70?62:50;
-  const hs=h1===0?0:h1===1?100:45;
-  const ht=r.HTTPS?100:0;
-  const cn=r['Canonical URL']?100:30;
-  const rt2=r['Response Time (ms)']||0;
-  const rts=rt2===0?0:rt2<500?100:rt2<1000?90:rt2<1500?75:rt2<2500?55:rt2<3500?30:10;
+  var tl=r['Title Length']||0,dl=r['Meta Description Length']||0,h1=r['H1 Count']||0;
+  var ts=tl===0?0:tl>=30&&tl<=60?100:tl<20?25:tl<30?60:tl<=70?72:35;
+  var ds=dl===0?0:dl>=70&&dl<=160?100:dl<50?30:dl<70?62:50;
+  var hs=h1===0?0:h1===1?100:45;
+  var ht=r.HTTPS?100:0;
+  var cn=r['Canonical URL']?100:30;
+  var rt2=r['Response Time (ms)']||0;
+  var rts=rt2===0?0:rt2<500?100:rt2<1000?90:rt2<1500?75:rt2<2500?55:rt2<3500?30:10;
   return Math.round((ts*20+ds*15+hs*15+ht*15+cn*10+rts*10)/85);
-}}
+}
 
-// Hero score
-$(()=>{{
-  const score=SUM.score||0;
-  const{{g,c}}=gradeOf(score);
-  $('#heroScore').text(score).css('background',c+'22').css('border-color',c).css('color',c).css('background','#fff');
-  $('#heroGrade').html(`Grade <b style="color:${{c}}">${{g}}</b>`);
-  $('#heroStats').html([
-    ['Pages Audited',SUM.total,'#1a3c5e'],
-    ['Critical Issues',SUM.critical_pages,'#dc2626'],
-    ['Warnings',SUM.warning_pages,'#d97706'],
-    ['Indexable',SUM.indexable,'#059669'],
-    ['Avg TTFB',SUM.avg_response_ms?(SUM.avg_response_ms+'ms'):'—','#2563eb'],
-    ['WAF Blocked',SUM.waf_blocked,'#7c3aed'],
-  ].map(([l,v,c])=>`<div class="col-6 col-md-4 col-lg-2"><div class="text-white-50 small">${{l}}</div><div class="fw-black fs-4" style="color:${{c}};mix-blend-mode:screen">${{v}}</div></div>`).join(''));
-}});
+// Hero
+(function(){
+  var score=SUM.score||0;
+  var gd=gradeOf(score);
+  var el=document.getElementById('heroScore');
+  if(el){el.textContent=score;el.style.borderColor=gd.c;}
+  var gr=document.getElementById('heroGrade');
+  if(gr)gr.innerHTML='Grade <b style="color:'+gd.c+'">'+gd.g+'</b>';
+  var stats=[
+    {l:'Pages Audited',v:SUM.total,c:'#fff',filter:'all'},
+    {l:'Critical Issues',v:SUM.critical_pages,c:'#fca5a5',filter:'critical'},
+    {l:'Warnings',v:SUM.warning_pages,c:'#fcd34d',filter:'warning'},
+    {l:'Indexable',v:SUM.indexable,c:'#6ee7b7',filter:'indexable'},
+    {l:'Avg TTFB',v:(SUM.avg_response_ms||0)>0?(SUM.avg_response_ms+'ms'):'—',c:'#93c5fd',filter:null},
+    {l:'WAF Blocked',v:SUM.waf_blocked,c:'#c4b5fd',filter:'waf'},
+  ];
+  var hs=document.getElementById('heroStats');
+  if(!hs)return;
+  hs.innerHTML=stats.map(function(s){
+    return '<div class="col-6 col-md-4 col-lg-2">'
+      +(s.filter?'<div class="stat-filter-btn" data-filter="'+s.filter+'" id="sfbtn-'+s.filter+'" onclick="applyFilter(\''+s.filter+'\')">':'<div>')
+      +'<div style="font-size:1.8rem;font-weight:900;color:'+s.c+'">'+esc(String(s.v))+'</div>'
+      +'<div style="font-size:.7rem;opacity:.75">'+esc(s.l)+'</div>'
+      +(s.filter?'<div style="font-size:.6rem;opacity:.5">click to filter</div>':'')
+      +'</div></div>';
+  }).join('');
+})();
+
+// Filter
+function applyFilter(f){
+  activeFilter=(activeFilter===f)?null:f;
+  document.querySelectorAll('.stat-filter-btn').forEach(function(b){b.classList.remove('active');});
+  if(activeFilter){var b=document.getElementById('sfbtn-'+activeFilter);if(b)b.classList.add('active');}
+  rebuildTable();
+  document.getElementById('tableSection').scrollIntoView({behavior:'smooth'});
+}
 
 // Priority improvements
-$(()=>{{
-  const total=RESULTS.length||1;
-  const items=[];
-  const noTitle=RESULTS.filter(r=>!r.Title&&!r['WAF Blocked']);
-  if(noTitle.length)items.push({{sev:'crit',count:noTitle.length,issue:'Missing title tags',fix:'Add unique, descriptive <title> tags (30–60 chars) to every page. This is the most impactful on-page SEO change you can make.',impact:'High'}});
-  const badTitle=RESULTS.filter(r=>r.Title&&(r['Title Length']<30||r['Title Length']>60)&&!r['WAF Blocked']);
-  if(badTitle.length>Math.round(total*0.2))items.push({{sev:'warn',count:badTitle.length,issue:'Title tags outside optimal length (30–60 chars)',fix:'Rewrite titles to be 30–60 characters. Too short = missed keyword opportunity; too long = Google truncates in SERPs.',impact:'High'}});
-  const noDesc=RESULTS.filter(r=>!r['Meta Description']&&!r['WAF Blocked']);
-  if(noDesc.length)items.push({{sev:'warn',count:noDesc.length,issue:'Missing meta descriptions',fix:'Write unique meta descriptions (70–160 chars) for each page. While not a direct ranking factor, they significantly improve click-through rates from search results.',impact:'Medium'}});
-  const noH1=RESULTS.filter(r=>!r['H1 Count']&&!r['WAF Blocked']);
-  if(noH1.length)items.push({{sev:'crit',count:noH1.length,issue:'Missing H1 tags',fix:'Add exactly one H1 tag per page containing the primary keyword. H1 is a strong on-page ranking signal.',impact:'High'}});
-  const noCanon=RESULTS.filter(r=>!r['Canonical URL']&&!r['WAF Blocked']);
-  if(noCanon.length>Math.round(total*0.3))items.push({{sev:'warn',count:noCanon.length,issue:'Missing canonical tags',fix:'Add <link rel="canonical"> to every page pointing to the preferred URL. This prevents duplicate content issues and consolidates link equity.',impact:'Medium'}});
-  const missingAlt=RESULTS.filter(r=>(r['Images Missing Alt']||0)>0&&!r['WAF Blocked']);
-  if(missingAlt.length)items.push({{sev:'warn',count:missingAlt.length,issue:`Images missing alt text`,fix:'Add descriptive alt attributes to all images. This helps image search rankings and improves web accessibility (WCAG compliance).',impact:'Medium'}});
-  const slowPages=RESULTS.filter(r=>(r['Response Time (ms)']||0)>2000&&!r['WAF Blocked']);
-  if(slowPages.length>Math.round(total*0.2))items.push({{sev:'warn',count:slowPages.length,issue:'Slow server response / TTFB (>2s)',fix:'Investigate server-side caching, CDN, and database query optimisation. TTFB is a Core Web Vitals signal and a confirmed Google ranking factor.',impact:'High'}});
-  const noSchema=RESULTS.filter(r=>!r['Has Structured Data']&&!r['WAF Blocked']);
-  if(noSchema.length>Math.round(total*0.5))items.push({{sev:'opp',count:noSchema.length,issue:'No Schema.org structured data',fix:'Add relevant Schema markup (Article, Product, BreadcrumbList, etc.) to enable rich results in Google SERPs — these significantly improve CTR.',impact:'Medium'}});
-  const waf=RESULTS.filter(r=>r['WAF Blocked']);
-  if(waf.length)items.push({{sev:'crit',count:waf.length,issue:'Pages blocked by WAF / bot protection',fix:'The crawler could not access these pages. Consider whitelisting the crawler IP or auditing these pages separately using a browser with credentials.',impact:'High'}});
-
-  if(!items.length){{
-    $('#priorityList').html('<div class="text-success fw-semibold">✨ No major issues detected — keep it up!</div>');
-    return;
-  }}
-  items.sort((a,b)=>(['crit','warn','opp'].indexOf(a.sev)-['crit','warn','opp'].indexOf(b.sev)));
-  $('#priorityList').html(items.map(it=>`
-    <div class="priority-card ${{it.sev}}">
-      <div class="d-flex align-items-center gap-2 mb-1">
-        <span class="badge" style="background:${{it.sev==='crit'?'#dc2626':it.sev==='warn'?'#d97706':'#2563eb'}}">${{it.count}} page${{it.count!==1?'s':''}}</span>
-        <strong style="font-size:.88rem">${{esc(it.issue)}}</strong>
-        <span class="ms-auto badge bg-light text-muted" style="font-size:.65rem">Impact: ${{it.impact}}</span>
-      </div>
-      <div style="font-size:.8rem;color:#475569">${{esc(it.fix)}}</div>
-    </div>`).join(''));
-}});
+(function(){
+  var total=RESULTS.length||1;
+  var items=[];
+  var nonWaf=RESULTS.filter(function(r){return !r['WAF Blocked'];});
+  var noTitle=nonWaf.filter(function(r){return !r.Title;});
+  if(noTitle.length)items.push({sev:'crit',n:noTitle.length,issue:'Missing title tags',fix:'Add a unique <title> (30-60 chars) to every page. Most impactful on-page SEO fix.',impact:'High'});
+  var badT=nonWaf.filter(function(r){var l=r['Title Length']||0;return r.Title&&(l<30||l>60);});
+  if(badT.length>Math.round(total*0.15))items.push({sev:'warn',n:badT.length,issue:'Title tags outside 30-60 chars',fix:'Rewrite titles to 30-60 characters. Too short = missed keywords; too long = truncated in SERPs.',impact:'High'});
+  var noDesc=nonWaf.filter(function(r){return !r['Meta Description'];});
+  if(noDesc.length>Math.round(total*0.1))items.push({sev:'warn',n:noDesc.length,issue:'Missing meta descriptions',fix:'Write unique meta descriptions (70-160 chars). Boosts click-through rates from search results.',impact:'Medium'});
+  var noH1=nonWaf.filter(function(r){return !r['H1 Count'];});
+  if(noH1.length)items.push({sev:'crit',n:noH1.length,issue:'Missing H1 tags',fix:'Add exactly one H1 per page with the primary keyword. Strong on-page ranking signal.',impact:'High'});
+  var noCanon=nonWaf.filter(function(r){return !r['Canonical URL'];});
+  if(noCanon.length>Math.round(total*0.3))items.push({sev:'warn',n:noCanon.length,issue:'Missing canonical tags',fix:'Add <link rel="canonical"> to prevent duplicate content and consolidate PageRank.',impact:'Medium'});
+  var altM=nonWaf.filter(function(r){return (r['Images Missing Alt']||0)>0;});
+  if(altM.length)items.push({sev:'warn',n:altM.length,issue:'Images missing alt text',fix:'Add descriptive alt attributes — improves image SEO and WCAG accessibility compliance.',impact:'Medium'});
+  var slowP=nonWaf.filter(function(r){return (r['Response Time (ms)']||0)>2000;});
+  if(slowP.length>Math.round(total*0.2))items.push({sev:'warn',n:slowP.length,issue:'Slow server TTFB (>2s)',fix:'Use server caching, CDN, and DB optimisation. TTFB is a confirmed Google ranking factor.',impact:'High'});
+  var noSch=nonWaf.filter(function(r){return !r['Has Structured Data'];});
+  if(noSch.length>Math.round(total*0.5))items.push({sev:'opp',n:noSch.length,issue:'No Schema.org structured data',fix:'Add JSON-LD Schema (Article, Product, BreadcrumbList) to unlock rich results in SERPs.',impact:'Medium'});
+  var waf=RESULTS.filter(function(r){return r['WAF Blocked'];});
+  if(waf.length)items.push({sev:'crit',n:waf.length,issue:'Pages blocked by WAF/bot protection',fix:'Crawler was blocked. If Googlebot is also blocked, these pages cannot be indexed.',impact:'High'});
+  var pl=document.getElementById('priorityList');
+  if(!pl)return;
+  if(!items.length){pl.innerHTML='<div class="text-success fw-semibold">No major issues detected!</div>';return;}
+  items.sort(function(a,b){return (['crit','warn','opp'].indexOf(a.sev)-['crit','warn','opp'].indexOf(b.sev));});
+  pl.innerHTML=items.map(function(it){
+    var bc=it.sev==='crit'?'#dc2626':it.sev==='warn'?'#d97706':'#2563eb';
+    var pct=Math.round(it.n/total*100);
+    return '<div class="priority-card '+it.sev+'">'
+      +'<div class="d-flex align-items-center gap-2 flex-wrap mb-1">'
+      +'<span class="badge" style="background:'+bc+'">'+it.n+' page'+(it.n!==1?'s':'')+'</span>'
+      +'<strong style="font-size:.88rem">'+esc(it.issue)+'</strong>'
+      +'<span class="ms-auto badge bg-light text-muted" style="font-size:.65rem">'+pct+'% affected · '+esc(it.impact)+' impact</span>'
+      +'</div>'
+      +'<div class="w-100 mb-1" style="height:4px;background:#fff8;border-radius:2px"><div style="height:4px;border-radius:2px;background:'+bc+';width:'+pct+'%"></div></div>'
+      +'<div style="font-size:.8rem;color:#475569">'+esc(it.fix)+'</div>'
+      +'</div>';
+  }).join('');
+})();
 
 // Wins & Issues
-$(()=>{{
-  const total=RESULTS.length||1;
-  const pct=(n,d)=>Math.round(n/Math.max(d,1)*100);
-  const wins=[],issues=[];
-  const httpsN=RESULTS.filter(r=>r.HTTPS).length,hPct=pct(httpsN,total);
-  if(hPct>=85)wins.push([`${{hPct}}% of pages are served over HTTPS`,`${{httpsN}} of ${{total}} pages are secure`]);
-  else issues.push([`Only ${{hPct}}% of pages use HTTPS`,`${{total-httpsN}} pages not secure — confirmed ranking penalty`]);
-  const idxPct=pct(SUM.indexable,total);
-  if(idxPct>=90)wins.push([`${{idxPct}}% of pages are indexable`,`${{SUM.indexable}} of ${{total}} can appear in Google`]);
-  else if(idxPct<75)issues.push([`Only ${{idxPct}}% indexable`,`${{SUM.non_indexable}} pages excluded from Google search`]);
-  const h1N=RESULTS.filter(r=>r['H1 Count']===1).length,h1Pct=pct(h1N,total);
-  if(h1Pct>=85)wins.push([`${{h1Pct}}% of pages have exactly one H1`,`Strong heading structure across audited pages`]);
-  else issues.push([`H1 issues on ${{100-h1Pct}}% of pages`,`${{total-h1N}} pages have missing or duplicate H1s`]);
-  const tN=RESULTS.filter(r=>{{const l=r['Title Length']||0;return r.Title&&l>=30&&l<=60;}}).length;
-  const tPct=pct(tN,total);
-  if(tPct>=80)wins.push([`${{tPct}}% of pages have optimised title tags`,`Titles within the 30–60 char sweet spot`]);
-  else issues.push([`Title issues on ${{100-tPct}}% of pages`,`${{total-tN}} pages have suboptimal title tags`]);
-  const sN=RESULTS.filter(r=>r['Has Structured Data']).length;
-  if(pct(sN,total)>=50)wins.push([`${{pct(sN,total)}}% of pages have structured data`,`Eligible for rich results in Google SERPs`]);
-  else issues.push([`Structured data absent on ${{100-pct(sN,total)}}% of pages`,`${{total-sN}} pages missing Schema markup`]);
-  const rt=SUM.avg_response_ms||0;
-  if(rt>0&&rt<1200)wins.push([`Excellent average TTFB: ${{rt}}ms`,`Fast server response is a Core Web Vitals signal`]);
-  else if(rt>2200)issues.push([`Average TTFB is ${{rt}}ms — too slow`,`Slow TTFB hurts Core Web Vitals and rankings`]);
-  if(SUM.waf_blocked>0)issues.push([`${{SUM.waf_blocked}} pages blocked by WAF`,`These pages could not be fully audited`]);
-  const winHtml=it=>`<div class="win-item"><span>✅</span><div><div class="fw-semibold">${{esc(it[0])}}</div><div class="text-muted small">${{esc(it[1])}}</div></div></div>`;
-  const issHtml=it=>`<div class="issue-item"><span>⚠️</span><div><div class="fw-semibold">${{esc(it[0])}}</div><div class="text-muted small">${{esc(it[1])}}</div></div></div>`;
-  $('#winsList').html(wins.map(winHtml).join('')||'<div class="text-muted small">Run a full crawl for more wins.</div>');
-  $('#issuesList').html(issues.map(issHtml).join('')||'<div class="text-success small">No significant issues detected!</div>');
-}});
+(function(){
+  var total=RESULTS.length||1;
+  function pct(n){return Math.round(n/total*100);}
+  var wins=[],issues=[];
+  var httpsN=RESULTS.filter(function(r){return r.HTTPS;}).length;
+  if(pct(httpsN)>=85)wins.push([pct(httpsN)+'% of pages are HTTPS',httpsN+' of '+total+' pages are secure']);
+  else issues.push(['Only '+pct(httpsN)+'% of pages use HTTPS',(total-httpsN)+' pages not secure — ranking penalty']);
+  var idxP=pct(SUM.indexable);
+  if(idxP>=90)wins.push([idxP+'% of pages indexable',SUM.indexable+' of '+total+' can appear in Google']);
+  else if(idxP<75)issues.push(['Only '+idxP+'% indexable',SUM.non_indexable+' pages excluded from Google']);
+  var h1N=RESULTS.filter(function(r){return r['H1 Count']===1;}).length;
+  if(pct(h1N)>=85)wins.push([pct(h1N)+'% of pages have one H1','Strong heading structure']);
+  else issues.push(['H1 issues on '+(100-pct(h1N))+'% of pages',(total-h1N)+' pages with missing/duplicate H1s']);
+  var tN=RESULTS.filter(function(r){var l=r['Title Length']||0;return r.Title&&l>=30&&l<=60;}).length;
+  if(pct(tN)>=80)wins.push([pct(tN)+'% have optimal title tags','Within 30-60 char sweet spot']);
+  else issues.push(['Title issues on '+(100-pct(tN))+'% of pages',(total-tN)+' pages with suboptimal titles']);
+  var sN=RESULTS.filter(function(r){return r['Has Structured Data'];}).length;
+  if(pct(sN)>=50)wins.push([pct(sN)+'% of pages have Schema data','Eligible for rich results']);
+  else issues.push(['Schema absent on '+(100-pct(sN))+'% of pages',(total-sN)+' pages missing structured data']);
+  var rt=SUM.avg_response_ms||0;
+  if(rt>0&&rt<1200)wins.push(['Excellent TTFB: '+rt+'ms','Fast server response — Core Web Vitals signal']);
+  else if(rt>2200)issues.push(['TTFB is '+rt+'ms — too slow','Slow server response hurts rankings']);
+  if(SUM.waf_blocked>0)issues.push([SUM.waf_blocked+' pages blocked by WAF','Could not be fully audited — Googlebot may also be blocked']);
+  function wi(it){return '<div class="win-item"><span>✅</span><div><div class="fw-semibold">'+esc(it[0])+'</div><div class="text-muted small">'+esc(it[1])+'</div></div></div>';}
+  function ii(it){return '<div class="issue-item"><span>⚠️</span><div><div class="fw-semibold">'+esc(it[0])+'</div><div class="text-muted small">'+esc(it[1])+'</div></div></div>';}
+  var wl=document.getElementById('winsList'),il=document.getElementById('issuesList');
+  if(wl)wl.innerHTML=wins.map(wi).join('')||'<div class="text-muted small">Run a full crawl for more wins.</div>';
+  if(il)il.innerHTML=issues.map(ii).join('')||'<div class="text-success small">No significant issues found!</div>';
+})();
 
 // Table
-$(()=>{{
-  const rows=RESULTS.map((r,i)=>{{
-    const score=pageScore(r);
-    const{{g,c,bg}}=gradeOf(score);
-    const isWaf=r['WAF Blocked'];
-    const sc=r['Status Code']||0;
-    const scC=sc>=200&&sc<300?'#059669':sc>=300&&sc<400?'#d97706':'#dc2626';
-    const rt=r['Response Time (ms)']||0;
-    const rtC=rt>3000?'#dc2626':rt>1500?'#d97706':'#059669';
-    const tl=r['Title Length']||0,dl=r['Meta Description Length']||0,h1=r['H1 Count']||0;
-    const cls=isWaf?'row-waf':r['Critical Count']>0?'row-crit':r['Warning Count']>0?'row-warn':'row-ok';
-    const top=((r['Critical Issues']||'')+';'+(r.Warnings||'')).split(';').filter(Boolean)[0]?.trim()||'';
-    return `<tr class="${{cls}}" style="cursor:pointer" onclick="showDetail(${{i}})">
-      <td><a href="${{esc(r.URL)}}" target="_blank" onclick="event.stopPropagation()" style="font-size:.75rem">${{esc(r.URL.replace(/^https?:\\/\\//,'').substring(0,55))}}</a>${{isWaf?'<span class="badge bg-purple ms-1" style="background:#7c3aed;font-size:.6rem">WAF</span>':''}}</td>
-      <td style="color:${{scC}};font-weight:700">${{sc}}</td>
-      <td style="color:${{rtC}};font-weight:600">${{rt?rt+'ms':'—'}}</td>
-      <td><span class="grade-badge" style="color:${{c}};background:${{bg}}">${{score}} ${{g}}</span></td>
-      <td class="${{!isWaf&&(tl>60||tl<30&&tl>0)?'text-danger fw-bold':''}}">${{isWaf?'—':tl}}</td>
-      <td class="${{!isWaf&&(dl>160||dl<70&&dl>0)?'text-warning fw-bold':''}}">${{isWaf?'—':dl}}</td>
-      <td class="${{!isWaf&&h1!==1?'text-danger fw-bold':''}}">${{isWaf?'—':h1}}</td>
-      <td>${{isWaf?'—':r['Word Count']||0}}</td>
-      <td>${{r['Canonical URL']?'✅':'❌'}}</td>
-      <td style="color:${{r.Indexable?'#059669':'#dc2626'}};font-weight:700">${{r.Indexable?'✓':'✗'}}</td>
-      <td><span class="badge bg-danger">${{r['Critical Count']||0}}</span></td>
-      <td><span class="badge bg-warning text-dark">${{r['Warning Count']||0}}</span></td>
-      <td style="font-size:.73rem;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${{esc(top.substring(0,60))}}</td>
-    </tr>`;
-  }});
-  $('#auditBody').html(rows.join(''));
-  $('#auditTable').DataTable({{pageLength:50,order:[[10,'desc']],scrollX:true}});
-}});
+var DT=null;
+function rebuildTable(){
+  var body=document.getElementById('auditBody');
+  if(!body)return;
+  var filtered=RESULTS;
+  if(activeFilter&&activeFilter!=='all'){
+    filtered=RESULTS.filter(function(r){
+      if(activeFilter==='critical')return (r['Critical Count']||0)>0;
+      if(activeFilter==='warning')return (r['Warning Count']||0)>0;
+      if(activeFilter==='indexable')return r.Indexable;
+      if(activeFilter==='non-indexable')return !r.Indexable;
+      if(activeFilter==='waf')return r['WAF Blocked'];
+      return true;
+    });
+  }
+  if(DT){DT.destroy();DT=null;}
+  body.innerHTML=filtered.map(function(r,i){
+    var score=pageScore(r);
+    var gd=gradeOf(score);
+    var isWaf=r['WAF Blocked'];
+    var sc=r['Status Code']||0;
+    var scC=sc>=200&&sc<300?'#059669':sc>=300&&sc<400?'#d97706':'#dc2626';
+    var rt=r['Response Time (ms)']||0;
+    var rtC=rt>3000?'#dc2626':rt>1500?'#d97706':'#059669';
+    var tl=r['Title Length']||0,dl=r['Meta Description Length']||0,h1=r['H1 Count']||0;
+    var cls=isWaf?'row-waf':r['Critical Count']>0?'row-crit':r['Warning Count']>0?'row-warn':'row-ok';
+    var allIssues=((r['Critical Issues']||'')+';'+(r.Warnings||'')).split(';').filter(Boolean);
+    var top=allIssues.length?allIssues[0].trim():'';
+    var ri=RESULTS.indexOf(r);
+    return '<tr class="'+cls+'" style="cursor:pointer" onclick="showDetail('+ri+')">'
+      +'<td><a href="'+esc(r.URL)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:.75rem">'+esc((r.URL||'').replace(/^https?:\/\//,'').substring(0,55))+'</a>'
+      +(isWaf?'<span class="badge ms-1" style="background:#7c3aed;font-size:.6rem">WAF</span>':'')+'</td>'
+      +'<td style="color:'+scC+';font-weight:700">'+sc+'</td>'
+      +'<td style="color:'+rtC+';font-weight:600">'+(rt?rt+'ms':'—')+'</td>'
+      +'<td><span class="grade-badge" style="color:'+gd.c+';background:'+gd.bg+'">'+score+' '+gd.g+'</span></td>'
+      +'<td class="'+((!isWaf&&(tl>60||(tl<30&&tl>0)))?'text-danger fw-bold':'')+'">'+(isWaf?'—':tl)+'</td>'
+      +'<td class="'+((!isWaf&&(dl>160||(dl<70&&dl>0)))?'text-warning fw-bold':'')+'">'+(isWaf?'—':dl)+'</td>'
+      +'<td class="'+((!isWaf&&h1!==1)?'text-danger fw-bold':'')+'">'+(isWaf?'—':h1)+'</td>'
+      +'<td>'+(isWaf?'—':(r['Word Count']||0))+'</td>'
+      +'<td>'+(r['Canonical URL']?'✅':'❌')+'</td>'
+      +'<td style="color:'+(r.Indexable?'#059669':'#dc2626')+';font-weight:700">'+(r.Indexable?'✓':'✗')+'</td>'
+      +'<td><span class="badge bg-danger">'+(r['Critical Count']||0)+'</span></td>'
+      +'<td><span class="badge bg-warning text-dark">'+(r['Warning Count']||0)+'</span></td>'
+      +'<td style="font-size:.73rem;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(top.substring(0,70))+'</td>'
+      +'</tr>';
+  }).join('');
+  DT=$('#auditTable').DataTable({pageLength:50,order:[[10,'desc']],scrollX:true,destroy:true});
+}
 
-// Screaming Frog comparison
-$(()=>{{
-  const sfRows=[
-    ['Meta Title','✅ Length, content, pixel width','✅ + duplicate detection','We flag duplicates as warnings'],
+rebuildTable();
+
+// SF comparison
+(function(){
+  var rows=[
+    ['Meta Title','✅ Length, content, missing','✅ + duplicate detection + pixel width',''],
     ['Meta Description','✅ Length, content, missing','✅ + duplicates',''],
-    ['H1/H2/H3 Tags','✅ Count, first instance','✅ + all instances','We return first H1/H2/H3'],
-    ['Canonical URLs','✅ Present, self-ref check','✅ + chains',''],
+    ['H1/H2/H3 Tags','✅ Count + first instance','✅ All instances, duplicates',''],
+    ['Canonical URLs','✅ Present, cross-domain check','✅ + chains + loops',''],
     ['Meta Robots / noindex','✅','✅',''],
-    ['X-Robots-Tag','✅','✅',''],
-    ['Response Time (TTFB)','✅ Navigation Timing API','✅',''],
-    ['Full JS Load Time','✅ (new: full_load_ms)','❌ (HTTP only)','We wait for JS hydration'],
-    ['HTTPS / HTTP','✅','✅',''],
-    ['Status Codes','✅','✅',''],
-    ['Redirects','✅','✅ + chains',''],
-    ['Image Alt Text','✅ Missing/empty/too long','✅',''],
-    ['Internal / External Links','✅ Counts','✅ + full link list export',''],
+    ['X-Robots-Tag (HTTP header)','✅','✅',''],
+    ['Response Time (TTFB)','✅ Navigation Timing API','✅ HTTP TTFB','Both browser-level'],
+    ['Full JS Render Time','✅ full_load_ms (unique!)','❌ HTTP only','We wait for JS hydration'],
+    ['HTTPS detection','✅','✅',''],
+    ['HTTP Status Codes','✅','✅',''],
+    ['Redirects','✅ Detected','✅ Full chain tracing',''],
+    ['Image Alt Text','✅ Missing / empty','✅ + too long',''],
+    ['Internal/External Links','✅ Counts','✅ Full link export',''],
     ['Open Graph Tags','✅ title/desc/image/type','✅',''],
     ['Twitter Card','✅','✅',''],
-    ['Schema / Structured Data','✅ Types detected','✅ + validation','We list types but don't validate'],
-    ['Hreflang','✅ Languages detected','✅ + return links',''],
+    ['Schema.org / Structured Data','✅ Types detected','✅ + validation',''],
+    ['Hreflang','✅ Languages detected','✅ + return link validation',''],
     ['Word Count','✅','✅',''],
-    ['Flesch Readability','✅','❌','We include this; SF does not'],
-    ['WAF / Bot Detection','✅ (unique feature)','❌',''],
-    ['JavaScript Rendering','✅ (Playwright)','✅ (custom rendering)','Both use real browsers'],
-    ['Duplicate Content','⚠️ Partial (canonical check)','✅ Full hash comparison','Planned improvement'],
-    ['Pagination (rel=next/prev)','✅ Detected','✅',''],
-    ['Breadcrumbs','✅ Detected','✅',''],
-    ['Page Speed / Core Web Vitals','⚠️ TTFB only','✅ Full CWV','Planned improvement'],
-    ['Sitemap crawling','❌','✅','Planned improvement'],
-    ['robots.txt parsing','❌','✅','Planned improvement'],
-    ['Custom extraction (XPath/RegEx)','❌','✅','Future feature'],
+    ['Flesch Readability','✅ (unique!)','❌','SF omits this; we include it'],
+    ['Duplicate Content','✅ Hash-based detection','✅ Hash-based','Newly implemented'],
+    ['robots.txt Parsing','✅ Disallow rules, sitemaps','✅','Newly implemented'],
+    ['WAF / Bot Detection','✅ (unique!)','❌','We flag bot-blocked pages'],
+    ['JS / SPA Rendering','✅ Playwright headless Chrome','✅ Custom rendering','Both use real browsers'],
+    ['Page Speed / Core Web Vitals','⚠️ TTFB + Full Load Time','✅ Full CWV suite','LCP/CLS planned'],
+    ['Sitemap crawl mode','⚠️ Partial','✅ Full','Planned improvement'],
+    ['Custom extraction (XPath)','❌ Future','✅',''],
+    ['Excel Export','✅','✅',''],
+    ['Interactive HTML Report','✅ (unique!)','❌','Shareable self-contained file'],
   ];
-  $('#sfTable').html(sfRows.map(([s,us,sf,note])=>`<tr>
-    <td class="fw-semibold">${{esc(s)}}</td>
-    <td>${{us}}</td><td>${{sf}}</td>
-    <td class="text-muted">${{esc(note)}}</td>
-  </tr>`).join(''));
-}});
+  var t=document.getElementById('sfTable');
+  if(!t)return;
+  t.innerHTML=rows.map(function(row){
+    var us=row[1],sf=row[2],note=row[3];
+    return '<tr>'
+      +'<td class="fw-semibold">'+esc(row[0])+'</td>'
+      +'<td style="color:'+(us.startsWith('✅')?'#059669':us.startsWith('⚠️')?'#d97706':'#94a3b8')+'">'+us+'</td>'
+      +'<td style="color:'+(sf.startsWith('✅')?'#059669':sf.startsWith('⚠️')?'#d97706':'#94a3b8')+'">'+sf+'</td>'
+      +'<td class="text-muted fst-italic">'+esc(note)+'</td>'
+      +'</tr>';
+  }).join('');
+})();
 
 // Detail pane
-function showDetail(i){{
-  const r=RESULTS[i];if(!r)return;
-  const score=pageScore(r);const{{g,c,bg}}=gradeOf(score);
-  const isWaf=r['WAF Blocked'];
-  function pr(label,val,sub){{
-    return `<div class="param-row">
-      <div class="param-label">${{esc(label)}}</div>
-      <div class="param-val">${{val}}<br><span class="text-muted" style="font-size:.72rem">${{esc(sub||'')}}</span></div>
-    </div>`;
-  }}
-  function prScore(label,val,sub,score){{
-    const{{g,c,bg}}=gradeOf(score);
-    return `<div class="param-row">
-      <div class="param-label">${{esc(label)}}</div>
-      <div class="param-val">${{val}}<br><span style="font-size:.72rem;color:${{c}}">${{esc(sub||'')}}</span></div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <div class="score-bar-wrap"><div class="score-bar"><div class="score-bar-fill" style="width:${{score}}%;background:${{c}}"></div></div></div>
-        <span class="grade-badge" style="color:${{c}};background:${{bg}}">${{score}} ${{g}}</span>
-      </div>
-    </div>`;
-  }}
-  const criticals=(r['Critical Issues']||'').split(';').filter(Boolean);
-  const warnings=(r.Warnings||'').split(';').filter(Boolean);
-  const info=(r.Info||'').split(';').filter(Boolean);
-  const tl=r['Title Length']||0,dl=r['Meta Description Length']||0,h1=r['H1 Count']||0;
-  const ts=tl===0?0:tl>=30&&tl<=60?100:tl<20?25:tl<30?60:tl<=70?72:35;
-  const ds=dl===0?0:dl>=70&&dl<=160?100:dl<50?30:dl<70?62:50;
-  const rt=r['Response Time (ms)']||0;
-  const rts=rt===0?0:rt<500?100:rt<1000?90:rt<1500?75:rt<2500?55:rt<3500?30:10;
-  document.getElementById('detailContent').innerHTML=`
-    <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-      <span class="badge bg-${{(r['Status Code']||0)===200?'success':'danger'}}">${{r['Status Code']||0}}</span>
-      ${{isWaf?'<span class="badge" style="background:#7c3aed">WAF Blocked</span>':''}}
-      ${{r.HTTPS?'<span class="badge bg-success">HTTPS</span>':''}}
-      ${{r.Indexable?'<span class="badge bg-success">Indexable</span>':'<span class="badge bg-danger">Not Indexable</span>'}}
-      <span class="ms-auto grade-badge" style="color:${{c}};background:${{bg}};font-size:1rem">${{score}} — Grade ${{g}}</span>
-    </div>
-    <div class="mb-2"><a href="${{esc(r.URL)}}" target="_blank" style="font-size:.78rem;word-break:break-all">${{esc(r.URL)}}</a></div>
-    <div class="section-hdr">📝 Content</div>
-    ${{prScore('Meta Title',r.Title?`"${{esc(r.Title.substring(0,70))}}"`:'<span class="text-danger">Missing</span>',`${{tl}} chars`,ts)}}
-    ${{prScore('Meta Description',r['Meta Description']?`"${{esc(r['Meta Description'].substring(0,100))}}"`:'<span class="text-warning">Missing</span>',`${{dl}} chars`,ds)}}
-    ${{prScore('H1 Tag',r['H1 First']?esc(r['H1 First']):'<span class="text-danger">Missing</span>',h1===1?'Perfect — one H1':h1>1?h1+' H1 tags (only 1 recommended)':'Missing',h1===1?100:0)}}
-    ${{pr('H2 / H3',(r['H2 Count']||0)+' H2 · '+(r['H3 Count']||0)+' H3',r['H2 First']?`First H2: "${{esc(r['H2 First'])}}"`:'' )}}
-    ${{pr('Word Count',isWaf?'N/A':(r['Word Count']||0)+' words',isWaf?'WAF blocked':(r['Paragraph Count']||0)+' paragraphs')}}
-    ${{r['Flesch Reading Ease']?pr('Readability','Flesch: '+r['Flesch Reading Ease'],r['Flesch Reading Ease']>=60?'Easy to read':r['Flesch Reading Ease']>=30?'Moderate':'Difficult'):''}}
-    <div class="section-hdr">⚙️ Technical</div>
-    ${{prScore('HTTPS',r.HTTPS?'✅ Secure':'❌ HTTP only',r.HTTPS?'Secure connection':'Ranking penalty',r.HTTPS?100:0)}}
-    ${{prScore('Response Time (TTFB)',rt?rt+'ms':'N/A','Time To First Byte (what Google measures)',rts)}}
-    ${{r['Full Load Time (ms)']&&r['Full Load Time (ms)']!==rt?pr('Full JS Load Time',r['Full Load Time (ms)']+'ms','Includes JS rendering / hydration time'):''}}\
-    ${{pr('Canonical URL',r['Canonical URL']?`<code style="font-size:.72rem">${{esc(r['Canonical URL'].substring(0,70))}}</code>`:'<span class="text-warning">Missing</span>',r['Canonical URL']?'Canonical tag present':'Duplicate content risk')}}
-    ${{pr('Meta Robots',r['Meta Robots']||'Not set (defaults to index, follow)')}}
-    ${{pr('Page Size',(r['Page Size (KB)']||0)+' KB',(r['Text to HTML Ratio (%)']||0)+'% text-to-HTML ratio')}}
-    <div class="section-hdr">🖼️ Media &amp; Links</div>
-    ${{pr('Images',(r['Image Count']||0)+' total',r['Images Missing Alt']?r['Images Missing Alt']+' missing alt text':'All images have alt text')}}
-    ${{pr('Links',(r['Internal Links']||0)+' internal · '+(r['External Links']||0)+' external · '+(r['Nofollow Links']||0)+' nofollow')}}
-    <div class="section-hdr">🌐 Social &amp; Schema</div>
-    ${{pr('Open Graph',r['OG Title']?`"${{esc(r['OG Title'].substring(0,60))}}"`:'og:title missing',`desc ${{r['OG Description']?'✅':'❌'}} · image ${{r['OG Image']?'✅':'❌'}}`)}}
-    ${{pr('Structured Data',r['Has Structured Data']?esc(r['Schema Types']):'None detected')}}
-    ${{(criticals.length||warnings.length||info.length)?`
-    <div class="section-hdr">🚨 Issues</div>
-    ${{criticals.map(i=>`<div class="issue-crit py-1" style="font-size:.83rem">❌ ${{esc(i)}}</div>`).join('')}}
-    ${{warnings.map(i=>`<div class="issue-warn py-1" style="font-size:.83rem">⚠️ ${{esc(i)}}</div>`).join('')}}
-    ${{info.map(i=>`<div class="issue-info py-1" style="font-size:.83rem">ℹ️ ${{esc(i)}}</div>`).join('')}}
-    `:''}}
-  `;
+function showDetail(i){
+  var r=RESULTS[i];if(!r)return;
+  var score=pageScore(r);var gd=gradeOf(score);
+  var isWaf=r['WAF Blocked'];
+  function pr(label,val,sub){
+    return '<div class="param-row"><div class="param-label">'+esc(label)+'</div>'
+      +'<div class="param-val">'+val+(sub?'<br><span style="color:#94a3b8;font-size:.72rem">'+esc(sub)+'</span>':'')+'</div></div>';
+  }
+  function prScore(label,val,sub,s){
+    var g=gradeOf(s);
+    return '<div class="param-row"><div class="param-label">'+esc(label)+'</div>'
+      +'<div class="param-val">'+val+(sub?'<br><span style="color:'+g.c+';font-size:.72rem">'+esc(sub)+'</span>':'')+'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'
+      +'<div class="score-bar-wrap"><div class="score-bar"><div class="score-bar-fill" style="width:'+s+'%;background:'+g.c+'"></div></div></div>'
+      +'<span class="grade-badge" style="color:'+g.c+';background:'+g.bg+'">'+s+' '+g.g+'</span>'
+      +'</div></div>';
+  }
+  var crits=(r['Critical Issues']||'').split(';').filter(Boolean);
+  var warns=(r.Warnings||'').split(';').filter(Boolean);
+  var infos=(r.Info||'').split(';').filter(Boolean);
+  var tl=r['Title Length']||0,dl=r['Meta Description Length']||0,h1=r['H1 Count']||0;
+  var ts=tl===0?0:tl>=30&&tl<=60?100:tl<20?25:tl<30?60:tl<=70?72:35;
+  var ds=dl===0?0:dl>=70&&dl<=160?100:dl<50?30:dl<70?62:50;
+  var rt=r['Response Time (ms)']||0;
+  var rts=rt===0?0:rt<500?100:rt<1000?90:rt<1500?75:rt<2500?55:rt<3500?30:10;
+  var sc=r['Status Code']||0;
+  document.getElementById('detailContent').innerHTML=
+    '<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">'
+    +'<span class="badge bg-'+(sc===200?'success':'danger')+'">'+sc+'</span>'
+    +(isWaf?'<span class="badge" style="background:#7c3aed">WAF Blocked</span>':'')
+    +(r.HTTPS?'<span class="badge bg-success">HTTPS</span>':'')
+    +(r.Indexable?'<span class="badge bg-success">Indexable</span>':'<span class="badge bg-danger">Not Indexable</span>')
+    +'<span class="ms-auto grade-badge" style="color:'+gd.c+';background:'+gd.bg+';font-size:1rem">'+score+' — Grade '+gd.g+'</span>'
+    +'</div>'
+    +'<div class="mb-2 small"><a href="'+esc(r.URL)+'" target="_blank" style="word-break:break-all">'+esc(r.URL)+'</a></div>'
+    +(r['Final URL']&&r['Final URL']!==r.URL?'<div class="mb-2 small text-muted">→ Redirects to: '+esc(r['Final URL'].substring(0,70))+'</div>':'')
+    +(isWaf?'<div class="alert alert-warning py-2 small"><b>⚠️ WAF Detected</b> — Metrics below reflect the challenge page, not real content.</div>':'')
+    +'<div class="section-hdr">📝 Content</div>'
+    +prScore('Meta Title',r.Title?'"'+esc(r.Title.substring(0,70))+'"':'<span class="text-danger">Missing</span>',tl+' chars',ts)
+    +prScore('Meta Description',r['Meta Description']?'"'+esc(r['Meta Description'].substring(0,100))+'"':'<span class="text-warning">Missing</span>',dl+' chars',ds)
+    +prScore('H1 Tag',r['H1 First']?esc(r['H1 First']):'<span class="text-danger">Missing</span>',h1===1?'Perfect — exactly one H1':h1>1?(h1+' H1 tags — only 1 recommended'):'Missing',h1===1?100:0)
+    +pr('H2 / H3',(r['H2 Count']||0)+' H2 · '+(r['H3 Count']||0)+' H3',r['H2 First']?'First H2: "'+esc(r['H2 First'].substring(0,50))+'"':'')
+    +pr('Word Count',isWaf?'N/A':((r['Word Count']||0)+' words'),isWaf?'WAF blocked':((r['Paragraph Count']||0)+' paragraphs'))
+    +(r['Flesch Reading Ease']?pr('Readability','Flesch: '+r['Flesch Reading Ease'],r['Flesch Reading Ease']>=60?'Easy to read':r['Flesch Reading Ease']>=30?'Moderate':'Difficult'):'')
+    +'<div class="section-hdr">⚙️ Technical</div>'
+    +prScore('HTTPS',r.HTTPS?'✅ Secure':'❌ HTTP only',r.HTTPS?'Secure connection':'Ranking penalty',r.HTTPS?100:0)
+    +prScore('Response Time (TTFB)',rt?rt+'ms':'N/A','Time To First Byte — what Google measures',rts)
+    +(r['Full Load Time (ms)']&&r['Full Load Time (ms)']!==rt?pr('Full JS Load Time',r['Full Load Time (ms)']+'ms','Includes JS rendering + SPA hydration'):'')
+    +pr('Canonical URL',r['Canonical URL']?'<code style="font-size:.72rem">'+esc(r['Canonical URL'].substring(0,70))+'</code>':'<span class="text-warning">Missing</span>',r['Canonical URL']?'Canonical tag present':'Duplicate content risk')
+    +pr('Meta Robots',r['Meta Robots']||'Not set (defaults to index, follow)')
+    +pr('Page Size',(r['Page Size (KB)']||0)+' KB',(r['Text to HTML Ratio (%)']||0)+'% text-to-HTML ratio')
+    +'<div class="section-hdr">🖼️ Media &amp; Links</div>'
+    +pr('Images',(r['Image Count']||0)+' total',r['Images Missing Alt']?(r['Images Missing Alt']+' missing alt text'):'All images have alt text')
+    +pr('Links',(r['Internal Links']||0)+' internal · '+(r['External Links']||0)+' external · '+(r['Nofollow Links']||0)+' nofollow')
+    +'<div class="section-hdr">🌐 Social &amp; Schema</div>'
+    +pr('Open Graph',r['OG Title']?'"'+esc(r['OG Title'].substring(0,55))+'"':'og:title not set','desc '+(r['OG Description']?'✅':'❌')+' · image '+(r['OG Image']?'✅':'❌'))
+    +pr('Structured Data',r['Has Structured Data']?esc(r['Schema Types']):'None detected')
+    +pr('Hreflang',r['Hreflang Languages']||'None (may be intentional)')
+    +((crits.length||warns.length||infos.length)?
+      '<div class="section-hdr">🚨 Issues</div>'
+      +crits.map(function(x){return '<div class="issue-crit py-1 small">❌ '+esc(x)+'</div>';}).join('')
+      +warns.map(function(x){return '<div class="issue-warn py-1 small">⚠️ '+esc(x)+'</div>';}).join('')
+      +infos.map(function(x){return '<div class="issue-info py-1 small">ℹ️ '+esc(x)+'</div>';}).join('')
+    :'')
+    +'<div style="height:32px"></div>';
   document.getElementById('detailPane').style.display='block';
-}}
-function closePane(){{document.getElementById('detailPane').style.display='none';}}
+}
+function closePane(){document.getElementById('detailPane').style.display='none';}
+})();
 </script>
-</body></html>"""
+"""
+
+
+def _build_html_report(data_json: str, site_url: str, generated_at: str) -> str:
+    import html as _html
+    site_esc = _html.escape(site_url)
+    date_str = generated_at[:10]
+    # Escape </script> in JSON to prevent premature tag closure in browser
+    data_safe = data_json.replace("</", "<\\/")
+
+    return (
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
+        "<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
+        f"<title>SEO Audit \u2014 {site_esc}</title>\n"
+        "<link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css\" rel=\"stylesheet\">\n"
+        "<link href=\"https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css\" rel=\"stylesheet\">\n"
+        + _R_CSS
+        + "</head>\n<body>\n"
+        "<div class=\"dyn-bg\"><span></span><span></span></div>\n"
+        "<div class=\"hero mb-4\">\n<div class=\"container\">\n"
+        "<div class=\"d-flex align-items-center gap-3 mb-3\">\n"
+        "  <div style=\"width:38px;height:38px;background:rgba(255,255,255,.15);border-radius:8px;"
+        "display:flex;align-items:center;justify-content:center;font-size:20px\">&#x1F525;</div>\n"
+        "  <div><div class=\"fw-bold\">SEO Audit Report</div>"
+        f"<div class=\"opacity-75 small\">{site_esc}</div></div>\n"
+        f"  <div class=\"ms-auto opacity-60 small\">{date_str}</div>\n"
+        "</div>\n"
+        "<div class=\"row g-3 align-items-center\">\n"
+        "  <div class=\"col-auto\">"
+        "<div class=\"score-circle\" id=\"heroScore\">&#8212;</div>"
+        "<div class=\"text-center mt-1 small opacity-75\" id=\"heroGrade\"></div></div>\n"
+        "  <div class=\"col\"><div class=\"row g-2\" id=\"heroStats\"></div></div>\n"
+        "</div>\n</div>\n</div>\n"
+        "<div class=\"container pb-5\">\n"
+        "  <div class=\"card p-4 mb-4\">\n"
+        "    <h5 class=\"fw-bold mb-3\" style=\"color:var(--navy)\">&#127919; Priority Improvements</h5>\n"
+        "    <div id=\"priorityList\"><div class=\"text-muted small\">Loading&#8230;</div></div>\n"
+        "  </div>\n"
+        "  <div class=\"row g-3 mb-4\">\n"
+        "    <div class=\"col-lg-6\"><div class=\"card p-4 h-100\">"
+        "<h6 class=\"fw-bold text-success mb-3\">&#9989; What's Working Well</h6>"
+        "<div id=\"winsList\"></div></div></div>\n"
+        "    <div class=\"col-lg-6\"><div class=\"card p-4 h-100\">"
+        "<h6 class=\"fw-bold text-danger mb-3\">&#9888;&#65039; What Needs Attention</h6>"
+        "<div id=\"issuesList\"></div></div></div>\n"
+        "  </div>\n"
+        "  <div class=\"card p-0 mb-4 overflow-hidden\" id=\"tableSection\">\n"
+        "    <div class=\"px-4 py-3 border-bottom d-flex justify-content-between align-items-center\""
+        " style=\"background:var(--navy)\">\n"
+        "      <span class=\"text-white fw-bold\">All Pages"
+        "<span id=\"filterBadge\" class=\"ms-2 badge bg-warning text-dark\" style=\"display:none\"></span></span>\n"
+        "      <span class=\"text-white opacity-60 small\">click row for full SEO breakdown</span>\n"
+        "    </div>\n"
+        "    <div class=\"table-responsive\">\n"
+        "      <table id=\"auditTable\" class=\"table table-hover mb-0\">\n"
+        "        <thead class=\"table-dark\"><tr>"
+        "<th>URL</th><th>Status</th><th>TTFB</th><th>Score</th>"
+        "<th title=\"Title Length\">TL</th><th title=\"Description Length\">DL</th>"
+        "<th>H1</th><th>Words</th><th>Canon</th><th>Idx</th>"
+        "<th>Crit</th><th>Warn</th><th>Top Issue</th>"
+        "</tr></thead>\n"
+        "        <tbody id=\"auditBody\"></tbody>\n"
+        "      </table>\n"
+        "    </div>\n"
+        "  </div>\n"
+        "  <div class=\"card p-4 mb-4\">\n"
+        "    <h5 class=\"fw-bold mb-3\" style=\"color:var(--navy)\">&#128203; Coverage vs. Screaming Frog</h5>\n"
+        "    <div class=\"table-responsive\">\n"
+        "      <table class=\"table table-sm table-bordered\" style=\"font-size:.8rem\">\n"
+        "        <thead class=\"table-light\"><tr><th>Signal</th><th>This Tool</th><th>Screaming Frog</th><th>Notes</th></tr></thead>\n"
+        "        <tbody id=\"sfTable\"></tbody>\n"
+        "      </table>\n"
+        "    </div>\n"
+        "  </div>\n"
+        "</div>\n"
+        "<div id=\"detailPane\">\n"
+        "  <div class=\"close-pane d-flex justify-content-between align-items-center\">\n"
+        "    <strong>Page Detail</strong>\n"
+        "    <button class=\"btn btn-sm btn-outline-secondary\" onclick=\"closePane()\">&#10005; Close</button>\n"
+        "  </div>\n"
+        "  <div id=\"detailContent\"></div>\n"
+        "</div>\n"
+        f"<script type=\"application/json\" id=\"__audit_data__\">{data_safe}</script>\n"
+        "<script src=\"https://code.jquery.com/jquery-3.7.1.min.js\"></script>\n"
+        "<script src=\"https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js\"></script>\n"
+        "<script src=\"https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js\"></script>\n"
+        + _R_JS
+        + "</body>\n</html>"
+    )
+
 
 
 @app.delete("/api/audit/{job_id}")

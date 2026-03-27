@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, Download, RefreshCw, AlertCircle, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Download, RefreshCw, AlertCircle, Loader2, ChevronDown, ChevronUp, Flame } from "lucide-react";
 import ScoreGauge from "@/components/ScoreGauge";
 import WinsIssues from "@/components/WinsIssues";
 import ChartsRow from "@/components/ChartsRow";
@@ -11,16 +11,29 @@ import SFComparison from "@/components/SFComparison";
 import { startAudit, getStatus, getResults, excelDownloadUrl, htmlReportUrl, AuditStatus, AuditResults } from "@/lib/api";
 
 type Phase = "idle" | "running" | "done" | "error";
+export type FilterMode = "critical" | "warning" | "indexable" | "non-indexable" | "waf" | "all" | null;
 
-function StatCard({ label, value, sub, color = "#2563eb" }: {
+function StatCard({ label, value, sub, color = "#2563eb", active, onClick }: {
   label: string; value: string | number; sub?: string; color?: string;
+  active?: boolean; onClick?: () => void;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col gap-0.5">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`bg-white rounded-xl border p-4 flex flex-col gap-0.5 text-left transition-all duration-200 w-full
+        ${onClick ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0" : "cursor-default"}
+        ${active ? "ring-2 shadow-md -translate-y-0.5" : "border-slate-200"}`}
+      style={{ ringColor: color, outlineColor: color,
+               ...(active ? { borderColor: color, boxShadow: `0 0 0 2px ${color}40` } : {}) }}
+    >
       <div className="text-2xl font-extrabold leading-none" style={{ color }}>{value}</div>
       <div className="text-xs font-semibold text-slate-700 mt-1">{label}</div>
       {sub && <div className="text-xs text-slate-400">{sub}</div>}
-    </div>
+      {onClick && <div className="text-xs mt-1 font-semibold opacity-60" style={{ color }}>
+        {active ? "✓ Filtering" : "Click to filter →"}
+      </div>}
+    </button>
   );
 }
 
@@ -35,6 +48,7 @@ export default function Home() {
   const [status, setStatus]     = useState<AuditStatus | null>(null);
   const [results, setResults]   = useState<AuditResults | null>(null);
   const [error, setError]       = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<FilterMode>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const jobRef  = useRef<string | null>(null);
@@ -91,6 +105,15 @@ export default function Home() {
     setStatus(null);
     setResults(null);
     setError(null);
+    setFilterMode(null);
+  }
+
+  function toggleFilter(mode: FilterMode) {
+    setFilterMode(f => f === mode ? null : mode);
+    // Scroll to table
+    setTimeout(() => {
+      document.getElementById("results-table")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   }
 
   const sum = results?.summary;
@@ -105,11 +128,11 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#1a3c5e] flex items-center justify-center">
-              <span className="text-white text-sm font-black">S</span>
+              <Flame size={16} className="text-orange-400" />
             </div>
             <span className="font-bold text-[#1a3c5e] text-sm tracking-tight">SEO Audit Tool</span>
             <span className="text-slate-300 text-sm">|</span>
-            <span className="text-xs text-slate-500">Technical SEO Crawler</span>
+            <span className="text-xs text-slate-500">Screaming Frog-level insights</span>
           </div>
           {phase === "done" && results && (
             <div className="flex items-center gap-2">
@@ -137,11 +160,16 @@ export default function Home() {
           <div className="fade-up">
             {/* Hero text */}
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-extrabold text-[#1a3c5e] mb-2">
-                Technical SEO Audit
+              <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-700 text-xs font-bold px-3 py-1.5 rounded-full mb-4">
+                <Flame size={13} className="text-orange-500" />
+                Screaming Frog-level analysis · Real browser · No install needed
+              </div>
+              <h1 className="text-4xl font-extrabold text-[#1a3c5e] mb-3 tracking-tight">
+                Technical SEO Audit Tool
               </h1>
-              <p className="text-slate-500 max-w-xl mx-auto">
-                Crawls your site with a real browser, scores every SEO signal per page, and tells you exactly what to fix.
+              <p className="text-slate-500 max-w-xl mx-auto text-base">
+                Crawls your site using headless Chrome, scores 20+ SEO signals per page with individual grades,
+                detects WAF blocks, and delivers a downloadable interactive report — in minutes.
               </p>
             </div>
 
@@ -215,17 +243,35 @@ export default function Home() {
               </form>
             </div>
 
-            {/* Feature bullets */}
-            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+            {/* Feature grid */}
+            <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 max-w-5xl mx-auto">
               {[
-                { icon: "🔍", title: "Screaming Frog-level depth", desc: "Crawls up to 200 pages with a real Chrome browser" },
-                { icon: "📊", title: "Per-parameter scoring", desc: "Every SEO signal gets an individual A–F grade" },
-                { icon: "🛡️", title: "WAF detection", desc: "Identifies pages blocked by bot-protection systems" },
+                { icon: "🔍", title: "Real browser crawl", desc: "Headless Chrome renders JS apps perfectly" },
+                { icon: "📊", title: "A–F grades per signal", desc: "20+ parameters individually scored" },
+                { icon: "🛡️", title: "WAF detection", desc: "Identifies bot-blocked pages automatically" },
+                { icon: "⚡", title: "True TTFB timing", desc: "Navigation Timing API, not just HTTP" },
+                { icon: "🕵️", title: "Duplicate detection", desc: "Hash-based content deduplication" },
+                { icon: "📄", title: "Interactive report", desc: "Downloadable HTML & Excel exports" },
               ].map(f => (
-                <div key={f.title} className="bg-white rounded-xl border border-slate-200 p-5">
+                <div key={f.title} className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 p-4 text-center hover:border-blue-200 hover:shadow-sm transition-all">
                   <div className="text-2xl mb-2">{f.icon}</div>
-                  <div className="font-semibold text-[#1a3c5e] text-sm mb-1">{f.title}</div>
-                  <div className="text-xs text-slate-500">{f.desc}</div>
+                  <div className="font-semibold text-[#1a3c5e] text-xs mb-1">{f.title}</div>
+                  <div className="text-xs text-slate-400 leading-relaxed">{f.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Stats strip */}
+            <div className="mt-6 flex flex-wrap justify-center gap-6 text-center max-w-3xl mx-auto">
+              {[
+                ["20+", "SEO signals checked"],
+                ["A–F", "per-parameter grades"],
+                ["200", "max pages per crawl"],
+                ["100%", "browser-rendered"],
+              ].map(([v, l]) => (
+                <div key={l} className="min-w-[80px]">
+                  <div className="text-2xl font-extrabold text-[#1a3c5e]">{v}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{l}</div>
                 </div>
               ))}
             </div>
@@ -286,14 +332,20 @@ export default function Home() {
                 <ScoreGauge score={sum.score} />
               </div>
 
-              {/* Stats grid */}
+              {/* Stats grid — all clickable to filter the table */}
               <div className="col-span-12 sm:col-span-8 lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <StatCard label="Pages Audited"  value={sum.total}               color="#1a3c5e" />
-                <StatCard label="Critical Issues" value={sum.critical_pages}     sub="pages affected" color="#dc2626" />
-                <StatCard label="Warnings"        value={sum.warning_pages}      sub="pages affected" color="#d97706" />
-                <StatCard label="Indexable"       value={sum.indexable}          sub={`of ${sum.total} pages`} color="#059669" />
-                <StatCard label="Avg TTFB"         value={rtDisplay}              sub={sum.avg_response_ms ? "time to first byte" : "no timing data"} color={rtColor} />
-                <StatCard label="WAF Blocked"     value={sum.waf_blocked}        sub="bot-protected" color="#7c3aed" />
+                <StatCard label="Pages Audited"   value={sum.total}          color="#1a3c5e"
+                  active={filterMode === "all"} onClick={() => toggleFilter("all")} sub="click to show all" />
+                <StatCard label="Critical Issues" value={sum.critical_pages} color="#dc2626"
+                  active={filterMode === "critical"} onClick={() => toggleFilter("critical")} sub="pages affected" />
+                <StatCard label="Warnings"        value={sum.warning_pages}  color="#d97706"
+                  active={filterMode === "warning"} onClick={() => toggleFilter("warning")} sub="pages affected" />
+                <StatCard label="Indexable"       value={sum.indexable}      color="#059669"
+                  active={filterMode === "indexable"} onClick={() => toggleFilter("indexable")} sub={`of ${sum.total} pages`} />
+                <StatCard label="Avg TTFB"        value={rtDisplay}          color={rtColor}
+                  sub={sum.avg_response_ms ? "time to first byte" : "no timing data"} />
+                <StatCard label="WAF Blocked"     value={sum.waf_blocked}    color="#7c3aed"
+                  active={filterMode === "waf"} onClick={() => toggleFilter("waf")} sub="bot-protected" />
               </div>
             </div>
 
@@ -314,7 +366,9 @@ export default function Home() {
             </div>
 
             {/* Table */}
-            <ResultsTable results={results.results} />
+            <div id="results-table">
+              <ResultsTable results={results.results} filterMode={filterMode} onClearFilter={() => setFilterMode(null)} />
+            </div>
 
             {/* Screaming Frog comparison */}
             <SFComparison />

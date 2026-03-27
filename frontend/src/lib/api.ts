@@ -110,6 +110,17 @@ export interface PageResult {
   "Full Load Time (ms)": number;
   "Redirect URL": string;
 
+  // Duplicate content detection
+  "Duplicate Content": boolean;
+  "Duplicate Of": string;
+
+  // robots.txt
+  "Blocked by robots.txt": boolean;
+  "Robots.txt Sitemaps": string;
+
+  // Crawl metadata
+  "Crawl Depth": number;
+
   // Audit flags
   "WAF Blocked": boolean;
   "Content Timed Out": boolean;

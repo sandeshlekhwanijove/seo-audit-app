@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PageResult } from "@/lib/api";
-import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronsUpDown, X } from "lucide-react";
 import PageDetailPanel from "./PageDetailPanel";
+import type { FilterMode } from "@/app/page";
 
 type SortDir = "asc" | "desc" | null;
 type SortKey = keyof PageResult | "_pageScore";
@@ -45,13 +46,29 @@ function ScorePill({ score }: { score: number }) {
   );
 }
 
-export default function ResultsTable({ results }: { results: PageResult[] }) {
+const FILTER_LABELS: Record<NonNullable<FilterMode>, string> = {
+  critical: "Critical Issues",
+  warning: "Warnings",
+  indexable: "Indexable pages",
+  "non-indexable": "Non-indexable pages",
+  waf: "WAF-blocked pages",
+  all: "All pages",
+};
+
+export default function ResultsTable({ results, filterMode, onClearFilter }: {
+  results: PageResult[];
+  filterMode?: FilterMode;
+  onClearFilter?: () => void;
+}) {
   const [search, setSearch]     = useState("");
   const [sortKey, setSortKey]   = useState<SortKey>("Critical Count");
   const [sortDir, setSortDir]   = useState<SortDir>("desc");
   const [page, setPage]         = useState(0);
   const [detail, setDetail]     = useState<PageResult | null>(null);
   const PER_PAGE = 50;
+
+  // Reset page when filter changes
+  useEffect(() => { setPage(0); }, [filterMode]);
 
   const withScore = useMemo(() =>
     results.map(r => ({ ...r, _pageScore: quickPageScore(r) })),
@@ -60,14 +77,23 @@ export default function ResultsTable({ results }: { results: PageResult[] }) {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return withScore.filter(r =>
-      !q ||
-      (r.URL ?? "").toLowerCase().includes(q) ||
-      (r.Title ?? "").toLowerCase().includes(q) ||
-      (r["Critical Issues"] ?? "").toLowerCase().includes(q) ||
-      (r.Warnings ?? "").toLowerCase().includes(q)
-    );
-  }, [withScore, search]);
+    return withScore.filter(r => {
+      // Apply stat-card filter
+      if (filterMode && filterMode !== "all") {
+        if (filterMode === "critical" && (r["Critical Count"] ?? 0) < 1) return false;
+        if (filterMode === "warning" && (r["Warning Count"] ?? 0) < 1) return false;
+        if (filterMode === "indexable" && !r.Indexable) return false;
+        if (filterMode === "non-indexable" && r.Indexable) return false;
+        if (filterMode === "waf" && !r["WAF Blocked"]) return false;
+      }
+      // Apply text search
+      return !q ||
+        (r.URL ?? "").toLowerCase().includes(q) ||
+        (r.Title ?? "").toLowerCase().includes(q) ||
+        (r["Critical Issues"] ?? "").toLowerCase().includes(q) ||
+        (r.Warnings ?? "").toLowerCase().includes(q);
+    });
+  }, [withScore, search, filterMode]);
 
   const sorted = useMemo(() => {
     if (!sortDir) return filtered;
@@ -100,7 +126,17 @@ export default function ResultsTable({ results }: { results: PageResult[] }) {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>
-            <h3 className="font-bold text-[#1a3c5e]">All Pages</h3>
+            <h3 className="font-bold text-[#1a3c5e] flex items-center gap-2">
+              All Pages
+              {filterMode && filterMode !== "all" && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
+                  {FILTER_LABELS[filterMode]}
+                  <button onClick={onClearFilter} className="hover:text-blue-900 ml-0.5">
+                    <X size={11} />
+                  </button>
+                </span>
+              )}
+            </h3>
             <p className="text-xs text-slate-400 mt-0.5">Click any row to view detailed SEO breakdown</p>
           </div>
           <div className="flex items-center gap-3">

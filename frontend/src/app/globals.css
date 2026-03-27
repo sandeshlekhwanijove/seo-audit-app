@@ -31,3 +31,49 @@ body {
   50%       { opacity: 0.6; }
 }
 .pulse-bar { animation: pulse-bar 1.5s ease-in-out infinite; }
+
+/* Dynamic background blobs */
+@keyframes bgFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(60px, -40px) scale(1.06); }
+  66%       { transform: translate(-30px, 50px) scale(0.95); }
+}
+@keyframes bgFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(-50px, 30px) scale(0.94); }
+  66%       { transform: translate(40px, -50px) scale(1.04); }
+}
+@keyframes bgFloat3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(30px, 30px) scale(1.08); }
+}
+.dyn-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.dyn-bg-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+}
+.dyn-bg-blob:nth-child(1) {
+  width: 700px; height: 700px;
+  background: radial-gradient(circle, #2563eb26, transparent 70%);
+  top: -200px; left: -150px;
+  animation: bgFloat1 28s ease-in-out infinite;
+}
+.dyn-bg-blob:nth-child(2) {
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, #1a3c5e1a, transparent 70%);
+  bottom: -100px; right: -100px;
+  animation: bgFloat2 35s ease-in-out infinite;
+}
+.dyn-bg-blob:nth-child(3) {
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, #7c3aed14, transparent 70%);
+  top: 40%; left: 55%;
+  animation: bgFloat3 22s ease-in-out infinite;
+}
