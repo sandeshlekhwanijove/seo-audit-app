@@ -38,35 +38,88 @@ export interface PageResult {
   "Final URL": string;
   "Status Code": number;
   "Response Time (ms)": number;
+  "Page Size (KB)": number;
+  "Page Size (bytes)": number;
+  "Content Type": string;
+  "Last Modified": string;
+  Server: string;
+  HTTPS: boolean;
+
+  // Titles & descriptions
   Title: string;
   "Title Length": number;
   "Meta Description": string;
   "Meta Description Length": number;
+  "Meta Keywords": string;
+  "Meta Robots": string;
+  "Meta Viewport": string;
+  "X-Robots-Tag": string;
+
+  // Headings
   "H1 Count": number;
   "H1 First": string;
   "H2 Count": number;
-  "Word Count": number;
+  "H2 First": string;
+  "H3 Count": number;
+
+  // Canonical & indexability
   "Canonical URL": string;
   Indexable: boolean;
-  "WAF Blocked": boolean;
-  "Content Timed Out": boolean;
-  HTTPS: boolean;
-  "Has Structured Data": boolean;
-  "Schema Types": string;
-  "OG Title": string;
-  "OG Image": string;
+  "Indexability Issues": string;
+
+  // Images
   "Image Count": number;
   "Images Missing Alt": number;
+  "Images Empty Alt": number;
+  "Images Alt Too Long": number;
+
+  // Links
   "Internal Links": number;
   "External Links": number;
+  "Nofollow Links": number;
+  "Total Links": number;
+
+  // Open Graph
+  "OG Title": string;
+  "OG Description": string;
+  "OG Image": string;
+  "OG Type": string;
+  "OG URL": string;
+
+  // Twitter
+  "Twitter Card": string;
+  "Twitter Title": string;
+
+  // Schema & hreflang
+  "Schema Types": string;
+  "Has Structured Data": boolean;
+  "Hreflang Languages": string;
+  "Has Hreflang": boolean;
+
+  // Content metrics
+  "Word Count": number;
+  "Paragraph Count": number;
+  "HTML Size (bytes)": number;
+  "Text to HTML Ratio (%)": number;
+  "Scripts Count": number;
+  "Stylesheets Count": number;
+  "Iframes Count": number;
+  "Flesch Reading Ease": number | string;
+
+  // Audit flags
+  "WAF Blocked": boolean;
+  "Content Timed Out": boolean;
+
+  // Issue counts & lists
   "Critical Count": number;
   "Warning Count": number;
   "Info Count": number;
   "Critical Issues": string;
   Warnings: string;
   Info: string;
-  "Page Size (KB)": number;
-  "Flesch Reading Ease": number | string;
+
+  // Computed in table
+  _pageScore?: number;
 }
 
 export interface AuditResults {
